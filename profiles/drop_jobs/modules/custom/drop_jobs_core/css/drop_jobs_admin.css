@@ -1,0 +1,123 @@
+/* Drop Jobs Admin styles */
+
+.path-admin-drop-jobs span.icon {
+  background: url('../images/drop-jobs-ico.png') 0 0 no-repeat;
+}
+
+/* Admin and Dashboard menus */
+
+#block-menu-menu-drop-jobs-admin ul.menu li,
+#block-menu-menu-drop-jobs-dashboard ul.menu li {
+  background: transparent;
+  border: 0 none;
+  padding: 4px 0 4px 4px;
+}
+
+#block-menu-menu-drop-jobs-admin ul.menu li a,
+#block-menu-menu-drop-jobs-dashboard ul.menu li a {
+  padding: 1px 0 1px 26px;
+  background-repeat: no-repeat;
+  background-position: 0 -148px;
+  display: block;
+  margin: 0;
+}
+
+#block-menu-menu-drop-jobs-admin ul.menu li:hover,
+#block-menu-menu-drop-jobs-admin ul.menu li.active-trail,
+#block-menu-menu-drop-jobs-dashboard ul.menu li:hover,
+#block-menu-menu-drop-jobs-dashboard ul.menu li.active-trail {
+  background: #F6F6F6;
+  -moz-border-radius: 3px;
+  -webkit-border-radius: 3px;
+  border-radius: 3px;
+  box-shadow: 1px 1px 1px #CCC;
+  -moz-box-shadow: 1px 1px 1px #CCC;
+  -webkit-box-shadow: 1px 1px 1px #CCC;
+  cursor: pointer;
+}
+
+/* Admin Page Icons (appear at the top left of pages) */
+
+body.page-admin-drop-jobs #page-title .page-title span.icon,
+body.page-dashboard #page-title .page-title span.icon,
+body.page-admin-config-drop-jobs #page-title .page-title span.icon,
+body.page-admin-reports-drop-jobs #page-title .page-title span.icon {
+  background-repeat: no-repeat;
+  background-position: 0 -89px !important;
+}
+
+/* Admin Home Links */
+
+body.page-admin-drop-jobs #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.drop-jobs a,
+#block-menu-menu-drop-jobs-dashboard li.home a,
+table.drop_jobs_dashboard td.drop_jobs a.drop_jobs_admin_link {
+  background-image: url('../images/home.png');
+}
+
+/* Admin Pages Links (administer pages) */
+
+body.page-admin-drop-jobs-pages #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.pages a,
+table.drop_jobs_dashboard td.pages a.drop_jobs_admin_link {
+  background-image: url('../images/page.png');
+}
+
+/* Admin Settings and Preferences Links */
+
+body.page-admin-config-drop-jobs #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.settings a,
+#block-menu-menu-drop-jobs-dashboard li.preferences a,
+table.drop_jobs_dashboard td.settings a.drop_jobs_admin_link,
+table.drop_jobs_dashboard td.preferences a.drop_jobs_admin_link {
+  background-image: url('../images/settings.png');
+}
+
+/* Admin Logout Links */
+
+#block-menu-menu-drop-jobs-admin li.logout a,
+#block-menu-menu-drop-jobs-dashboard li.logout a {
+/*table.drop_jobs_dashboard td.logout a.drop_jobs_admin_link {*/
+  background-image: url('../images/logout.png');
+}
+
+/* Admin Dashboard Table */
+
+table.drop_jobs_dashboard {
+  width: 100%;
+}
+
+table.drop_jobs_dashboard td {
+  width: 25%;
+  border: 0 none;
+  padding: 10px;
+  vertical-align: middle;
+}
+
+table.drop_jobs_dashboard div.link-wrapper {
+  border-collapse: collapse;
+  border-color: transparent;
+  -moz-border-radius: 6px;
+  -webkit-border-radius: 6px;
+  border-radius: 6px;
+  border-style: solid;
+  border-width: 1px;
+  height: 86px;
+  padding: 6px;
+  cursor: pointer;
+  text-align: center;
+}
+
+table.drop_jobs_dashboard div.link-wrapper:hover {
+  background: #ccc;
+  background: rgba(243, 243, 243, 0.4);
+  border-color: #CCCCCC #DDDDDD #EEEEEE;
+}
+
+table.drop_jobs_dashboard a.drop_jobs_admin_link {
+  display: block;
+  background-position: top center;
+  background-repeat: no-repeat;
+  padding-top: 68px;
+  margin: 0 auto;
+}

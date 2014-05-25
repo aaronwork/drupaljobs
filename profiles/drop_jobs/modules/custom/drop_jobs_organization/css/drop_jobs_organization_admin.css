@@ -1,0 +1,18 @@
+/* Drop Jobs Organization Admin styles */
+
+/* Organization Dashboard Home */
+
+body.page-dashboard-organization #page-title .page-title span.icon {
+  background-image: url('../../drop_jobs_core/images/home.png');
+}
+
+/* Admin Organizations Links */
+
+body.page-admin-drop-jobs-organizations #page-title .page-title span.icon,
+body.page-dashboard-organization-page #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.organizations a,
+#block-menu-menu-drop-jobs-dashboard li.organization a,
+table.drop_jobs_dashboard td.organizations a.drop_jobs_admin_link,
+table.drop_jobs_dashboard td.organization a.drop_jobs_admin_link {
+  background-image: url('../images/organization.png');
+}

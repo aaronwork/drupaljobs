@@ -1,0 +1,25 @@
+/* Drop Jobs Application Admin styles */
+
+/* Admin Application Links */
+
+body.page-admin-drop-jobs-applications #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.applications a,
+table.drop_jobs_dashboard td.applications a.drop_jobs_admin_link {
+  background-image: url('../images/application.png');
+}
+
+/* Admin Applications Received Links */
+
+body.page-dashboard-recruiter-applications #page-title .page-title span.icon,
+body.page-dashboard-recruiter #block-menu-menu-drop-jobs-dashboard li.applications a,
+body.page-dashboard-recruiter table.drop_jobs_dashboard td.applications a.drop_jobs_admin_link {
+  background-image: url('../images/application-received.png');
+}
+
+/* Admin Applications Sent Links */
+
+body.page-dashboard-candidate-applications #page-title .page-title span.icon,
+body.page-dashboard-candidate #block-menu-menu-drop-jobs-dashboard li.applications a,
+body.page-dashboard-candidate table.drop_jobs_dashboard td.applications a.drop_jobs_admin_link {
+  background-image: url('../images/application-sent.png');
+}

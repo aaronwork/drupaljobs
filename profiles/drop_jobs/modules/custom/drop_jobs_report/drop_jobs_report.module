@@ -1,0 +1,170 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Report module.
+ */
+
+include_once 'drop_jobs_report.features.inc';
+
+/**
+ * Implements hook_permission().
+ */
+function drop_jobs_report_permission() {
+  return array(
+    'administer drop_jobs reports' => array(
+      'title' => t('Administer Drop Jobs reports'),
+    ),
+    'view drop_jobs reports' => array(
+      'title' => t('View Drop Jobs reports'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function drop_jobs_report_menu() {
+  $items = array();
+
+  // Report settings form.
+  $items['admin/config/drop-jobs/report'] = array(
+    'title' => 'Reports',
+    'description' => 'Configure Reports.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_report_settings'),
+    'access arguments' => array('administer drop_jobs reports'),
+    'file' => 'drop_jobs_report.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  // Reports main page.
+  $items['admin/reports/drop-jobs'] = array(
+    'title' => 'Drop Jobs',
+    'description' => 'View reports about all aspects of Drop Jobs.',
+    'page callback' => 'drop_jobs_report_dashboard',
+    'access arguments' => array('view drop_jobs reports'),
+    'menu_name' => 'management',
+  );
+
+  $items['admin/reports/drop-jobs/home'] = array(
+    'title' => 'Reports Home',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -50,
+  );
+
+  // Candidate reports page.
+  $items['admin/reports/drop-jobs/candidates'] = array(
+    'title' => 'Candidates',
+    'page callback' => 'drop_jobs_report_page',
+    'access arguments' => array('view drop_jobs reports'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  // Recruiter reports page.
+  $items['admin/reports/drop-jobs/recruiters'] = array(
+    'title' => 'Recruiters',
+    'page callback' => 'drop_jobs_report_page',
+    'access arguments' => array('view drop_jobs reports'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  // Job reports page.
+  $items['admin/reports/drop-jobs/jobs'] = array(
+    'title' => 'Jobs',
+    'page callback' => 'drop_jobs_report_page',
+    'access arguments' => array('view drop_jobs reports'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_init().
+ */
+function drop_jobs_report_init() {
+  // Add admin section styles.
+  if (drop_jobs_core_is_admin_page()) {
+    // Add Drop Jobs Report styles.
+    drupal_add_css(drupal_get_path('module', 'drop_jobs_report') . '/css/drop_jobs_report_admin.css');
+  }
+}
+
+/**
+ * Implements hook_help().
+ */
+function drop_jobs_report_help($path, $arg) {
+  switch ($path) {
+    case 'admin/config/drop-jobs/report':
+      return t('Here you can configure settings for your site Reports.');
+    case 'admin/reports/drop-jobs':
+      return t('This is the Drop Jobs Reports Dashboard. Here you can view detailed reports for all aspects of your job search website.');
+      // Specific reports pages.
+    case 'admin/reports/drop-jobs/candidates':
+      $return = t('These are the available candidate reports.');
+
+      if (user_access('administer drop_jobs reports')) {
+        $return .= ' ' . t('All the data comes from Views with the "drop_jobs_report_candidate" tag and the blocks are placed here via the "drop_jobs_report_candidate" context.');
+      }
+
+      return $return;
+    case 'admin/reports/drop-jobs/recruiters':
+      $return = t('These are the available recruiter reports.');
+
+      if (user_access('administer drop_jobs reports')) {
+        $return .= ' ' . t('All the data comes from Views with the "drop_jobs_report_recruiter" tag and the blocks are placed here via the "drop_jobs_report_recruiter" context.');
+      }
+
+      return $return;
+    case 'admin/reports/drop-jobs/jobs':
+      $return = t('These are the available job reports.');
+
+      if (user_access('administer drop_jobs reports')) {
+        $return .= ' ' . t('All the data comes from Views with the "drop_jobs_report_job" tag and the blocks are placed here via the "drop_jobs_report_job" context.');
+      }
+
+      return $return;
+  }
+}
+
+/**
+ * Implements hook_variable_info().
+ */
+function drop_jobs_report_variable_info() {
+  $variables = array();
+
+  $variables['drop_jobs_report_items_per_row'] = array(
+    'title' => t('Report Dashboard items per row'),
+    'default' => 4,
+    'group' => 'drop_jobs_report',
+    'token' => FALSE,
+  );
+
+  return $variables;
+}
+
+/**
+ * Page callback.
+ *
+ * Display main reports dashboard page.
+ *
+ * @see drop_jobs_report_menu()
+ */
+function drop_jobs_report_dashboard() {
+  $cols_per_row = variable_get_value('drop_jobs_report_items_per_row');
+  $empty_text = t('In order to view reports, please enable at least one Drop Jobs Report submodule.');
+
+  return drop_jobs_core_menu_table('menu-drop-jobs-reports', $cols_per_row, $empty_text);
+}
+
+/**
+ * Page callback.
+ *
+ * Displays a blank page for displaying blocks with reports.
+ * There might be a better way to do this but this works just fine.
+ *
+ * @see drop_jobs_report_menu()
+ */
+function drop_jobs_report_page() {
+  return '';
+}

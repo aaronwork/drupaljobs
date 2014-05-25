@@ -1,0 +1,26 @@
+name = Drop Jobs Saved Searches
+description = Allow users to save searches and receive notifications for them.
+core = 7.x
+package = Drop Jobs
+php = 5.2.4
+project = drop_jobs_search_saved
+dependencies[] = context
+dependencies[] = ctools
+dependencies[] = drop_jobs_search
+dependencies[] = entity
+dependencies[] = features
+dependencies[] = search_api_saved_searches
+features[context][] = drop_jobs_search_job_saved
+features[context][] = drop_jobs_search_resume_saved
+features[ctools][] = context:context:3
+features[features_api][] = api:1
+features[search_api_saved_searches_settings][] = job_index
+features[search_api_saved_searches_settings][] = resume_index
+features[user_permission][] = use search_api_saved_searches
+
+; Information added by drupal.org packaging script on 2013-02-15
+version = "7.x-1.0-alpha10"
+core = "7.x"
+project = "drop_jobs"
+datestamp = "1360942887"
+

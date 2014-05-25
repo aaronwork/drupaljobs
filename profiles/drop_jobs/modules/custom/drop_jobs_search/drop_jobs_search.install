@@ -1,0 +1,62 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Search installation hooks.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function drop_jobs_search_enable() {
+  // Rebuild the features static caches.
+  features_include(TRUE);
+
+  // Rebuild the search module.
+  $module = 'drop_jobs_search';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+
+  // Rebuilds the candidate feature immediately so that we have the fields in
+  // Search API $index->getFields() available and the necessary database tables
+  // can be created.
+  $module = 'drop_jobs_candidate';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+
+  // Rebuilds the job feature immediately so that we have the fields in
+  // Search API $index->getFields() available and the necessary database tables
+  // can be created.
+  $module = 'drop_jobs_job';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+
+  entity_defaults_rebuild();
+  $index = entity_load_single('search_api_index', 'job_index');
+  $index->server()->fieldsUpdated($index);
+  $index = entity_load_single('search_api_index', 'resume_index');
+  $index->server()->fieldsUpdated($index);
+}
+
+/**
+ * Implements hook_disable().
+ */
+function drop_jobs_search_disable() {
+  // Delete used Views. Since Features doesn't do this let's try to cleanup
+  // after ourselves.
+  module_load_include('inc', 'drop_jobs_search', 'drop_jobs_search.views_default');
+  $views = drop_jobs_search_views_default_views();
+
+  while (!empty($views)) {
+    $obj = array_pop($views);
+
+    if ($view = views_get_view($obj->name)) {
+      views_delete_view($view);
+    }
+  }
+}

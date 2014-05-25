@@ -1,0 +1,96 @@
+<?php
+/*
+ * @file
+ * Drop Jobs Subscription installation hooks.
+ */
+
+/**
+ * Implements hook_schema_alter().
+ *
+ * Extend schema provided by Subs.
+ *
+ * @link http://drupal.org/project/subs
+ */
+function drop_jobs_subscription_schema_alter(&$schema) {
+  $schema['subs_type']['fields']['jobs'] = array(
+    'type' => 'int',
+    'description' => 'Number of allowed jobs',
+    'not null' => TRUE,
+    'unsigned' => TRUE,
+    'default' => 0,
+  );
+  $schema['subs_type']['fields']['contacts'] = array(
+    'type' => 'int',
+    'description' => 'Number of allowed contacts',
+    'not null' => TRUE,
+    'unsigned' => TRUE,
+    'default' => 0,
+  );
+  $schema['subs_type']['fields']['searches'] = array(
+    'type' => 'int',
+    'description' => 'Number of allowed saved searches',
+    'not null' => TRUE,
+    'unsigned' => TRUE,
+    'default' => 0,
+  );
+}
+
+/**
+ * Implements hook_install().
+ *
+ * Extend schema provided by Subs.
+ *
+ * @link http://drupal.org/project/subs
+ * @see drop_jobs_subscription_schema_alter()
+ */
+function drop_jobs_subscription_install() {
+  // Create dummy empty schema.
+  $schema = array('subs_type' => array());
+  // Get extra fields.
+  drop_jobs_subscription_schema_alter($schema);
+  // Add extra fields.
+  foreach ($schema['subs_type']['fields'] as $name => $spec) {
+    db_add_field('subs_type', $name, $spec);
+  }
+
+  // Change module weight.
+  db_update('system')
+    ->fields(array('weight' => 1))
+    ->condition('name', 'drop_jobs_subscription', '=')
+    ->execute();
+
+  // Delete default "Standard" subscription.
+  if ($standard = subs_get_types('standard')) {
+    subs_type_delete($standard);
+  }
+}
+
+/**
+ * Implements hook_disable().
+ *
+ * @see drop_jobs_subscription_schema_alter()
+ */
+function drop_jobs_subscription_disable() {
+  // Create dummy empty schema.
+  $schema = array('subs_type' => array());
+  // Get extra fields.
+  drop_jobs_subscription_schema_alter($schema);
+  // Remove extra fields.
+  foreach ($schema['subs_type']['fields'] as $name => $spec) {
+    db_drop_field('subs_type', $name);
+  }
+}
+
+/**
+ * Implements hook_enable().
+ */
+function drop_jobs_subscription_enable() {
+  // Rebuild the features static caches.
+  features_include(TRUE);
+
+  $module = 'drop_jobs_subscription';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+}

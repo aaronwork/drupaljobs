@@ -1,0 +1,14 @@
+name = "Drop Jobs i18n"
+description = "i18n integration for Drop Jobs."
+core = "7.x"
+package = "Drop Jobs"
+dependencies[] = "i18n_field"
+dependencies[] = "list"
+dependencies[] = "options"
+
+; Information added by drupal.org packaging script on 2013-02-15
+version = "7.x-1.0-alpha10"
+core = "7.x"
+project = "drop_jobs"
+datestamp = "1360942887"
+

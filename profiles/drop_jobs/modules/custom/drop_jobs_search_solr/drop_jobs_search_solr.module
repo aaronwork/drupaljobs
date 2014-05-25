@@ -1,0 +1,78 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Solr Search module.
+ */
+
+include_once 'drop_jobs_search_solr.features.inc';
+
+/**
+ * Implements hook_menu().
+ */
+function drop_jobs_search_solr_menu() {
+  $items = array();
+
+  // Admin settings form.
+  $items['admin/config/drop-jobs/search_solr'] = array(
+    'title' => 'Solr Search',
+    'description' => 'Configure Solr Search.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_search_solr_settings'),
+    'access arguments' => array('administer drop_jobs search'),
+    'file' => 'drop_jobs_search_solr.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_variable_info().
+ */
+function drop_jobs_search_solr_variable_info() {
+  $variables = array();
+
+  $variables['drop_jobs_search_solr_host'] = array(
+    'title' => t('Drop Jobs Apache Solr Host'),
+    'default' => 'localhost',
+    'localize' => FALSE,
+    'type' => 'string',
+    'group' => 'drop_jobs_search_solr',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_search_solr_port'] = array(
+    'title' => t('Drop Jobs Apache Solr Port'),
+    'default' => 8983,
+    'type' => 'number',
+    'group' => 'drop_jobs_search_solr',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_search_solr_path'] = array(
+    'title' => t('Drop Jobs Apache Solr Path'),
+    'default' => 'solr',
+    'localize' => FALSE,
+    'type' => 'string',
+    'group' => 'drop_jobs_search_solr',
+    'token' => FALSE,
+  );
+
+  return $variables;
+}
+
+/**
+ * Implements hook_default_search_api_index_alter().
+ */
+function drop_jobs_search_solr_default_search_api_index_alter(&$configs) {
+  // Enable the solr server for the job and resume searches.
+  $indices = array('job_index', 'resume_index');
+
+  foreach ($indices as $index) {
+    if (isset($configs[$index])) {
+      $configs[$index]->server = 'solr_server';
+      // Disable the default tokenizer as Solr does a better job.
+      $configs[$index]->options['processors']['search_api_tokenizer']['status'] = FALSE;
+    }
+  }
+}

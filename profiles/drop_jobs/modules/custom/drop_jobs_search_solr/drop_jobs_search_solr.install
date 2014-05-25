@@ -1,0 +1,52 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Solr Search installation hooks.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function drop_jobs_search_solr_enable() {
+  // Rebuilds the search feature to get the indices to properly switch
+  // over to the Solr server.
+  _drop_jobs_search_solr_rebuild_indices();
+
+  // Also rebuild this module.
+  $module = 'drop_jobs_search_solr';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+
+  drupal_set_message(t('Solr search module enabled sucessfully! Please go to the <a href="@link">admin page</a> to configure your Solr server.', array('@link' => url('admin/config/drop-jobs/search_solr'))), 'warning');
+}
+
+/**
+ * Implements hook_disable().
+ */
+function drop_jobs_search_solr_disable() {
+  // Disable the Solr Server.
+  search_api_server_disable('solr_server');
+
+  // Rebuilds the search feature to get the indices to properly switch
+  // back to the Database server.
+  _drop_jobs_search_solr_rebuild_indices();
+}
+
+/**
+ * Helper function. Rebuilds Search feature.
+ *
+ * @see drop_jobs_search_solr_enable()
+ * @see drop_jobs_search_solr_enable()
+ */
+function _drop_jobs_search_solr_rebuild_indices() {
+  // Rebuild the features static caches.
+  features_include(TRUE);
+
+  $module = 'drop_jobs_search';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+}

@@ -1,0 +1,15 @@
+/* Drop Jobs Job Admin styles */
+
+/* Manage Jobs links */
+
+body.page-admin-drop-jobs-jobs #page-title .page-title span.icon,
+body.page-dashboard-recruiter-jobs #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.jobs a,
+#block-menu-menu-drop-jobs-dashboard li.jobs a,
+table.drop_jobs_dashboard td.jobs a.drop_jobs_admin_link {
+  background-image: url('../images/job.png');
+}
+
+body.page-dashboard-recruiter-jobs #page-title .page-title span.icon {
+  background-position: 0 -89px !important;
+}

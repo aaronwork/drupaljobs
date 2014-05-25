@@ -1,0 +1,41 @@
+/* Drop Jobs Candidate Admin styles */
+
+/* Candidate Dashbaoard Home */
+
+body.page-dashboard-candidate #page-title .page-title span.icon {
+  background-image: url('../../drop_jobs_core/images/home.png');
+}
+
+/* Manage Candidates link */
+
+body.page-admin-drop-jobs-candidates #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.candidates a,
+table.drop_jobs_dashboard td.candidates a.drop_jobs_admin_link {
+  background-image: url('../images/candidate.png');
+}
+
+/* Favorite Jobs links */
+
+body.page-dashboard-candidate-favorites #page-title .page-title span.icon,
+body.page-dashboard-candidate #block-menu-menu-drop-jobs-dashboard li.favorites a,
+body.page-dashboard-candidate table.drop_jobs_dashboard td.favorites a.drop_jobs_admin_link {
+  background-image: url('../../drop_jobs_core/images/favorite.png');
+}
+
+/* My Résumé links */
+
+body.page-dashboard-candidate-resume #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-dashboard li.resume a,
+table.drop_jobs_dashboard td.resume a.drop_jobs_admin_link {
+  background-image: url('../images/candidate.png');
+}
+
+body.page-dashboard-candidate #page-title .page-title span.icon {
+  background-position: 0 -89px !important;
+}
+
+/* Candidate Preferences */
+
+body.page-dashboard-candidate-preferences #page-title .page-title span.icon {
+  background-image: url('../../drop_jobs_core/images/settings.png');
+}

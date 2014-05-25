@@ -1,0 +1,37 @@
+/* Drop Jobs Recruiter Admin styles */
+
+/* Recruiter Dashboard Home */
+
+body.page-dashboard-recruiter #page-title .page-title span.icon {
+  background-image: url('../../drop_jobs_core/images/home.png');
+}
+
+/* Manage Recruiters links */
+
+body.page-admin-drop-jobs-recruiters #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.recruiters a,
+table.drop_jobs_dashboard td.recruiters a.drop_jobs_admin_link {
+  background-image: url('../images/recruiter.png');
+}
+
+/* My Recruiter Profile links */
+
+body.page-dashboard-recruiter-profile #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-dashboard li.recruiter a,
+table.drop_jobs_dashboard td.recruiter a.drop_jobs_admin_link {
+  background-image: url('../images/recruiter.png');
+}
+
+/* Recruiter Preferences */
+
+body.page-dashboard-recruiter-preferences #page-title .page-title span.icon {
+  background-image: url('../../drop_jobs_core/images/settings.png');
+}
+
+/* Favorite Jobs links */
+
+body.page-dashboard-recruiter-favorites #page-title .page-title span.icon,
+body.page-dashboard-recruiter #block-menu-menu-drop-jobs-dashboard li.favorites a,
+body.page-dashboard-recruiter table.drop_jobs_dashboard td.favorites a.drop_jobs_admin_link {
+  background-image: url('../../drop_jobs_core/images/favorite.png');
+}

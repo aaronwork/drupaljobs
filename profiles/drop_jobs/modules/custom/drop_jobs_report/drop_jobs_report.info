@@ -1,0 +1,37 @@
+name = Drop Jobs Report
+description = Charts, graphs, reports and statistics for Drop Jobs.
+core = 7.x
+package = Drop Jobs
+php = 5.2.4
+dependencies[] = context
+dependencies[] = ctools
+dependencies[] = drop_jobs_candidate
+dependencies[] = drop_jobs_core
+dependencies[] = drop_jobs_recruiter
+dependencies[] = features
+dependencies[] = menu
+dependencies[] = views
+dependencies[] = visualization
+features[context][] = drop_jobs_report_candidate
+features[context][] = drop_jobs_report_job
+features[context][] = drop_jobs_report_recruiter
+features[ctools][] = context:context:3
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:1
+features[menu_custom][] = menu-drop-jobs-reports
+features[menu_links][] = menu-drop-jobs-admin:admin/reports/drop-jobs
+features[menu_links][] = menu-drop-jobs-reports:admin/reports/drop-jobs/candidates
+features[menu_links][] = menu-drop-jobs-reports:admin/reports/drop-jobs/jobs
+features[menu_links][] = menu-drop-jobs-reports:admin/reports/drop-jobs/recruiters
+features[user_permission][] = administer drop_jobs reports
+features[user_permission][] = view drop_jobs reports
+features[views_view][] = drop_jobs_report_candidate
+features[views_view][] = drop_jobs_report_job
+features[views_view][] = drop_jobs_report_recruiter
+
+; Information added by drupal.org packaging script on 2013-02-15
+version = "7.x-1.0-alpha10"
+core = "7.x"
+project = "drop_jobs"
+datestamp = "1360942887"
+

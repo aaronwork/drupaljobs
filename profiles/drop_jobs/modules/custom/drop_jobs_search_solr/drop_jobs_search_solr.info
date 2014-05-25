@@ -1,0 +1,20 @@
+name = Drop Jobs Solr Search
+description = Provides Apache Solr support for Drop Jobs Search. Use with caution: enabling this without a Solr instance available will probably break things.
+core = 7.x
+package = Drop Jobs
+php = 5.2.4
+project = drop_jobs_search_solr
+dependencies[] = drop_jobs_search
+dependencies[] = entity
+dependencies[] = search_api
+dependencies[] = search_api_solr
+dependencies[] = variable
+features[features_api][] = api:1
+features[search_api_server][] = solr_server
+
+; Information added by drupal.org packaging script on 2013-02-15
+version = "7.x-1.0-alpha10"
+core = "7.x"
+project = "drop_jobs"
+datestamp = "1360942887"
+

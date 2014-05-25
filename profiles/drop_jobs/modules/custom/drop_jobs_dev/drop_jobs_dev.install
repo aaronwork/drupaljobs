@@ -1,0 +1,93 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Dev installation hooks.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function drop_jobs_dev_install() {
+  // Change module weight.
+  db_update('system')
+    ->fields(array('weight' => 1))
+    ->condition('name', 'drop_jobs_dev', '=')
+    ->execute();
+
+  db_insert('date_format_type')
+    ->fields(array(
+      'type' => 'export',
+      'title' => 'Export',
+      'locked' => 1,
+    ))
+    ->execute();
+
+  variable_set('date_format_export', 'Y-m-d');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function drop_jobs_dev_uninstall() {
+  db_delete('date_format_type')->condition('type', 'export', '=')->execute();
+  variable_del('date_format_export');
+}
+
+/**
+ * Implements hook_enable().
+ */
+function drop_jobs_dev_enable() {
+  // Enable Drop Jobs development mode.
+  variable_set('drop_jobs_log', TRUE);
+
+  // Check updates for all modules, not just enabled ones.
+  variable_set('update_check_disabled', 1);
+
+  // Rebuild the features static caches.
+  features_include(TRUE);
+
+  $module = 'drop_jobs_dev';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+}
+
+/**
+ * Implements hook_disable().
+ */
+function drop_jobs_dev_disable() {
+  // Disable Drop Jobs development mode.
+  variable_set('drop_jobs_log', FALSE);
+
+  // Disable checking updates for all modules.
+  variable_del('update_check_disabled');
+
+  // Disable development dependencies.
+  $modules = array(
+    'addanother',
+    'advanced_help',
+    'devel',
+    'diff',
+    'drupal_ipsum',
+    'masquerade',
+    'migrate_ui',
+    'variable_admin',
+    'views_data_export',
+  );
+
+  module_disable($modules);
+
+  // Delete used Views. Since Features doesn't do this let's try to cleanup
+  // after ourselves.
+  module_load_include('inc', 'drop_jobs_dev', 'drop_jobs_dev.views_default');
+  $views = drop_jobs_dev_views_default_views();
+
+  while (!empty($views)) {
+    $obj = array_pop($views);
+
+    if ($view = views_get_view($obj->name)) {
+      views_delete_view($view);
+    }
+  }
+}

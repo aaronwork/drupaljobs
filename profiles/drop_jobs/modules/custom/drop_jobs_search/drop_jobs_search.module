@@ -1,0 +1,38 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Search module.
+ */
+
+include_once('drop_jobs_search.features.inc');
+
+/**
+ * Implements hook_permission().
+ */
+function drop_jobs_search_permission() {
+  return array(
+    'administer drop_jobs search' => array(
+      'title' => t('Administer Drop Jobs search'),
+    ),
+    'use drop_jobs resume search' => array(
+      'title' => t('Use résumé search'),
+    ),
+    'use advanced drop_jobs resume search' => array(
+      'title' => t('Use advanced résumé search'),
+    ),
+    'use drop_jobs job search' => array(
+      'title' => t('Use job search'),
+    ),
+    'use advanced drop_jobs job search' => array(
+      'title' => t('Use advanced job search'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_current_search_default_items_alter().
+ */
+//function drop_jobs_search_current_search_default_items_alter(&$items) {
+//  // Disable standard current search block by default.
+//  $items['standard']->disabled = TRUE;
+//}

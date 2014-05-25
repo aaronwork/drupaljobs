@@ -1,0 +1,15 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Job installation hooks.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function drop_jobs_job_install() {
+  db_update('system')
+    ->fields(array('weight' => 11))
+    ->condition('name', 'drop_jobs_job', '=')
+    ->execute();
+}

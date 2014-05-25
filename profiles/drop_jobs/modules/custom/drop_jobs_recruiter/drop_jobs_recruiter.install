@@ -1,0 +1,15 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Recruiter installation hooks.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function drop_jobs_recruiter_install() {
+  db_update('system')
+    ->fields(array('weight' => 1))
+    ->condition('name', 'drop_jobs_recruiter', '=')
+    ->execute();
+}

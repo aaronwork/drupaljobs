@@ -1,0 +1,54 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Demonstration module.
+ */
+include_once 'drop_jobs_demo.features.inc';
+
+/**
+ * Implements hook_migrate_api().
+ */
+function drop_jobs_demo_migrate_api() {
+  return array(
+    'api' => 2,
+    'migrations' => array(
+      'DropJobsPages' => array('class_name' => 'DropJobsPages'),
+      'DropJobsUsers' => array('class_name' => 'DropJobsUsers'),
+      'DropJobsOrganizations' => array('class_name' => 'DropJobsOrganizations'),
+      'DropJobsRecruiters' => array('class_name' => 'DropJobsRecruiters'),
+      'DropJobsRecruitersPhone' => array('class_name' => 'DropJobsRecruitersPhone'),
+      'DropJobsCandidates' => array('class_name' => 'DropJobsCandidates'),
+      'DropJobsCandidatesPhone' => array('class_name' => 'DropJobsCandidatesPhone'),
+      'DropJobsCandidatesPersonal' => array('class_name' => 'DropJobsCandidatesPersonal'),
+      'DropJobsCandidatesLanguage' => array('class_name' => 'DropJobsCandidatesLanguage'),
+      'DropJobsCandidatesEducation' => array('class_name' => 'DropJobsCandidatesEducation'),
+      'DropJobsCandidatesPreferences' => array('class_name' => 'DropJobsCandidatesPreferences'),
+      'DropJobsCandidatesSkills' => array('class_name' => 'DropJobsCandidatesSkills'),
+      'DropJobsCandidatesWork' => array('class_name' => 'DropJobsCandidatesWork'),
+      'DropJobsJobs' => array('class_name' => 'DropJobsJobs'),
+      'DropJobsMenuLinks' => array('class_name' => 'DropJobsMenuLinks'),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_node_view().
+ *
+ * Add some nice breadcrumbs for our jobs.
+ */
+function drop_jobs_demo_node_view($node, $view_mode, $langcode) {
+  if ($node->type === 'job' && $view_mode === 'full') {
+    $breadcrumb = drupal_get_breadcrumb();
+    $breadcrumb[] = l(t('Jobs'), 'search/job');
+
+    if ($value = field_get_items('node', $node, 'field_job_field')) {
+      $value = reset($value);
+      if (isset($value['taxonomy_term'])) {
+        $breadcrumb[] = l(t($value['taxonomy_term']->name), 'taxonomy/term/' . $value['taxonomy_term']->tid);
+      }
+    }
+
+    drupal_set_breadcrumb($breadcrumb);
+  }
+}

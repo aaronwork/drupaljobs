@@ -1,0 +1,112 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Recommendation installation hooks.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function drop_jobs_recommendation_install() {
+  db_update('system')
+    ->fields(array('weight' => 1))
+    ->condition('name', 'drop_jobs_recommendation', '=')
+    ->execute();
+}
+
+/**
+ * Implements hook_enable().
+ */
+function drop_jobs_recommendation_enable() {
+  // Rebuild the features static caches.
+  features_include(TRUE);
+
+  $module = 'drop_jobs_recommendation';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+}
+
+/**
+ * Implements hook_disable().
+ */
+function drop_jobs_recommendation_disable() {
+  // Delete used Views. Since Features doesn't do this let's try to cleanup
+  // after ourselves.
+  module_load_include('inc', 'drop_jobs_recommendation', 'drop_jobs_recommendation.views_default');
+  $views = drop_jobs_recommendation_views_default_views();
+
+  while (!empty($views)) {
+    $obj = array_pop($views);
+
+    if ($view = views_get_view($obj->name)) {
+      views_delete_view($view);
+    }
+  }
+}
+
+/**
+ * Implements hook_schema().
+ *
+ */
+function drop_jobs_recommendation_schema() {
+  $schema['drop_jobs_recommendation'] = array(
+    'description' => 'Job recommendations.',
+    'fields' => array(
+      'rid' => array(
+        'description' => 'Unique ID',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'nid' => array(
+        'description' => 'The {node}.nid - Job node ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'uid' => array(
+        'description' => 'The {users}.uid - User ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'created' => array(
+        'description' => 'Creation timestamp',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('rid'),
+    'indexes' => array('job' => array('nid'), 'user' => array('uid')),
+    'foreign keys' => array(
+      'nid' => array(
+        'table' => 'node',
+        'columns' => array('nid' => 'nid'),
+      ),
+      'uid' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+  );
+
+  // Support EntityCache module.
+  $schema['cache_entity_drop_jobs_recommendation'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_entity_drop_jobs_recommendation']['description'] = "Cache table used to store Job recommendation entity records.";
+
+  return $schema;
+}
+
+/**
+ * Create "cache_entity_drop_jobs_recommendation" table.
+ */
+function drop_jobs_recommendation_update_7000() {
+  $schema = drupal_get_schema('cache_entity_drop_jobs_recommendation', TRUE);
+  db_create_table('cache_entity_drop_jobs_recommendation', $schema);
+}

@@ -1,0 +1,8 @@
+/* Drop Jobs Subscription Admin styles */
+
+/* Admin Subscription Links */
+
+#block-menu-menu-drop-jobs-admin li.subscription a,
+table.drop_jobs_dashboard td.subscription a.drop_jobs_admin_link {
+  background-image: url('../images/subscription.png');
+}

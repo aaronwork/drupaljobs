@@ -1,0 +1,228 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Subscription module.
+ */
+include_once('drop_jobs_subscription.features.inc');
+
+/**
+ * Implements hook_menu().
+ */
+function drop_jobs_subscription_menu() {
+  $items = array();
+
+  // Admin settings form.
+  $items['admin/config/drop-jobs/subscription'] = array(
+    'title' => 'Subscription',
+    'description' => 'Configure Subscriptions.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_subscription_settings'),
+    'access arguments' => array('administer drop_jobs_subscription'),
+    'file' => 'drop_jobs_subscription.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  // Alias for manage subscriptions, creates a local task.
+  $items['admin/drop-jobs/subscriptions'] = array(
+    'title' => 'Subscriptions',
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('admin/content/subscription'),
+    'access arguments' => array('administer subs'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_init().
+ */
+function drop_jobs_subscription_init() {
+  // Add admin section styles.
+  $contexts = context_active_contexts();
+  if (array_key_exists('drop_jobs_admin', $contexts)) {
+    drupal_add_css(drupal_get_path('module', 'drop_jobs_subscription') . '/css/drop_jobs_subscription_admin.css');
+  }
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function drop_jobs_subscription_field_formatter_info() {
+  return array(
+    'drop_jobs_subscription_plan' => array(
+      'label' => t('Subscription Plan'),
+      'description' => t('Formats details for Subscription Plans'),
+      'field types' => array('number_integer'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function drop_jobs_subscription_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $elements = array();
+
+  foreach ($items as $delta => $item) {
+    $elements[$delta] = array(
+      '#markup' => ($item['value'] == -1) ? t('Unlimited') : $item['value'],
+    );
+  }
+
+  return $elements;
+}
+
+/**
+ * Implements hook_variable_info().
+ */
+function drop_jobs_subscription_variable_info() {
+  $variables = array();
+
+  $variables['drop_jobs_subscription_trial'] = array(
+    'title' => t('Free trial'),
+    'default' => TRUE,
+    'type' => 'boolean',
+    'group' => 'drop_jobs_subscription',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_subscription_trial_length'] = array(
+    'title' => t('Trial length'),
+    'default' => 30,
+    'type' => 'number',
+    'group' => 'drop_jobs_subscription',
+    'token' => TRUE,
+  );
+
+  $variables['drop_jobs_subscription_trial_plans'] = array(
+    'title' => t('Enabled plans'),
+    'default' => array(),
+    'type' => 'options',
+    'group' => 'drop_jobs_subscription',
+    'token' => TRUE,
+  );
+
+//  $variables['drop_jobs_subscription_restrict_subs'] = array(
+//    'title' => t('Only allow recruiters to subscribe to a plan when their profile is complete.'),
+//    'default' => FALSE,
+//    'type' => 'boolean',
+//    'group' => 'drop_jobs_subscription',
+//    'token' => FALSE,
+//  );
+
+  $variables['drop_jobs_subscription_restrict_jobs'] = array(
+    'title' => t('Only allow recruiters with active subscriptions to create jobs.'),
+    'default' => FALSE,
+    'type' => 'boolean',
+    'group' => 'drop_jobs_subscription',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_subscription_restrict_jobs_plans'] = array(
+    'title' => t('Only allow recruiters with active subscriptions to create jobs.'),
+    'default' => array(),
+    'type' => 'options',
+    'group' => 'drop_jobs_subscription',
+    'token' => FALSE,
+  );
+
+  return $variables;
+}
+
+### Extend entities provided by Subs ###
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function drop_jobs_subscription_form_subs_type_form_alter(&$form, &$form_state) {
+  $subscription_type = $form_state['subscription_type'];
+
+  $form['drop_jobs'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Drop Jobs',
+    '#description' => t('Extra settings for Drop Jobs'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['drop_jobs']['jobs'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Allowed jobs'),
+    '#description' => t('Number of allowed job listings per subscription. Leave 0 for unlimited jobs.'),
+    '#size' => 6,
+    '#default_value' => isset($subscription_type->jobs) ? $subscription_type->jobs
+        : 0,
+  );
+
+  $form['drop_jobs']['contacts'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Allowed contacts'),
+    '#description' => t('Number of contacts per subscription. Leave 0 for unlimited contacts.'),
+    '#size' => 6,
+    '#default_value' => isset($subscription_type->contacts) ? $subscription_type->contacts
+        : 0,
+  );
+
+  $form['drop_jobs']['searches'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Allowed saved searches'),
+    '#description' => t('Number of saved searches per subscription. Leave 0 for unlimited saved searches.'),
+    '#size' => 6,
+    '#default_value' => isset($subscription_type->searches) ? $subscription_type->searches
+        : 0,
+  );
+}
+
+/**
+ * Implements hook_node_access().
+ *
+ * Optionally, only allow recruiters with active subscriptions to create jobs.
+ */
+function drop_jobs_subscription_node_access($node, $op, $account) {
+  if (is_string($node) && $node === 'job' && $op === 'create' && drop_jobs_user_has_role(DROP_JOBS_ROLE_RECRUITER) && variable_get_value('drop_jobs_subscription_restrict_jobs')) {
+    if ($plans = variable_get_value('drop_jobs_subscription_restrict_jobs_plans')) {
+      $subscriptions = array();
+
+      // Discard unselected plans.
+      $plans = array_filter($plans);
+
+      // Check whether the user has an active subscription of specified plans.
+      while (!empty($plans)) {
+        $type_id = array_pop($plans);
+
+        if ($subscription_type = entity_load_single('subs_type', $type_id)) {
+          $subscriptions += subs_load_by_user($account, $subscription_type->name);
+        }
+      }
+
+      if (!empty($subscriptions)) {
+        foreach ($subscriptions as $subscription) {
+          if (subs_in_force($subscription)) {
+            return NODE_ACCESS_ALLOW;
+          }
+        }
+      }
+
+      // If we are at the node/add page, display a message to the user explaining why access was denied.
+      // @TODO find a more elegant way than using the superglobal.
+      if ($_GET['q'] === 'node/add/job') {
+        drupal_set_message(t("You must have an active subscription in order to post a new job."), 'warning', FALSE);
+      }
+
+      return NODE_ACCESS_DENY;
+
+      return NODE_ACCESS_IGNORE;
+    }
+  }
+}
+
+/**
+ * Implements hook_help().
+ */
+function drop_jobs_subscription_help($path, $arg) {
+  switch ($path) {
+    case 'admin/config/drop-jobs/subscription':
+      return t('Here you can configure settings for site Subscriptions.');
+  }
+}

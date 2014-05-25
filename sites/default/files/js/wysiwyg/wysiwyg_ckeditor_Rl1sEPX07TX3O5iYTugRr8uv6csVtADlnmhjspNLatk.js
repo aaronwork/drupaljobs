@@ -1,0 +1,1 @@
+window.CKEDITOR_BASEPATH = '/dropjobs/profiles/drop_jobs/libraries/ckeditor/';

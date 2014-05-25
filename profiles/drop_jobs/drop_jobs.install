@@ -1,0 +1,961 @@
+<?php
+/**
+ * @file
+ * Installation hooks for Drop Jobs profile.
+ */
+
+/**
+ * Implements hook_install_tasks().
+ */
+function drop_jobs_install_tasks() {
+  // Increase maximum function nesting level to prevent install errors.
+  $max_nesting_level = ini_get('xdebug.max_nesting_level');
+  if ($max_nesting_level > 0 && $max_nesting_level <= '200') {
+    ini_set('xdebug.max_nesting_level', 200);
+  }
+
+  // Remove any status messages that might have been set. They are unneeded.
+  drupal_get_messages('status', TRUE);
+
+  return array(
+    'drop_jobs_install_additional_modules' => array(
+      'display_name' => st('Install additional modules'),
+      'type' => 'batch',
+    ),
+    'drop_jobs_import_terms' => array(
+      'display_name' => st('Import taxonomy terms'),
+      'type' => 'batch',
+    ),
+    'drop_jobs_import_content' => array(
+      'display_name' => st('Import demo content'),
+      'type' => 'batch',
+    ),
+    'drop_jobs_install_wysiwyg' => array(
+      'display_name' => st('Configure WYSIWYG editor'),
+    ),
+    'drop_jobs_cleanup' => array(
+      'display_name' => st('Post-install cleanup'),
+      'type' => 'batch',
+    ),
+  );
+}
+
+/**
+ * Task callback: uses Batch API to install additional modules that should
+ * be enabled by default but shouldn't be considered profile dependencies.
+ *
+ * Also installs demo content if selected.
+ */
+function drop_jobs_install_additional_modules() {
+  $modules = array(
+    'admin_menu_toolbar',
+    'chosen',
+    'colorbox',
+    'context_ui',
+    'facetapi_pretty_paths',
+    'module_filter',
+    'pathauto',
+    'rules_admin',
+    'transliteration',
+    'views_ui',
+    'wysiwyg',
+  );
+
+  if ($extra_modules = variable_get('drop_jobs_install_extra_modules')) {
+    if (is_array($extra_modules)) {
+      $modules = array_merge($modules, $extra_modules);
+      $modules = array_unique($modules);
+    }
+  }
+
+  variable_del('drop_jobs_install_extra_modules');
+
+  if (variable_get('drop_jobs_install_demo_content', FALSE)) {
+    $modules[] = 'drop_jobs_demo';
+  }
+
+  // Resolve the dependencies now, so that module_enable() doesn't need
+  // to do it later for each individual module (which kills performance).
+  $files = system_rebuild_module_data();
+  $modules_sorted = array();
+  foreach ($modules as $module) {
+    if ($files[$module]->requires) {
+      // Create a list of dependencies that haven't been installed yet.
+      $dependencies = array_keys($files[$module]->requires);
+      $dependencies = array_filter($dependencies, '_drop_jobs_filter_dependencies');
+      // Add them to the module list.
+      $modules = array_merge($modules, $dependencies);
+    }
+  }
+  $modules = array_unique($modules);
+  foreach ($modules as $module) {
+    $modules_sorted[$module] = $files[$module]->sort;
+  }
+  arsort($modules_sorted);
+
+  $operations = array();
+  // Enable the selected modules.
+  foreach ($modules_sorted as $module => $weight) {
+    $operations[] = array('_drop_jobs_enable_module', array($module, $files[$module]->info['name']));
+  }
+
+  $batch = array(
+    'title' => t('Installing additional modules'),
+    'operations' => $operations,
+    'file' => drupal_get_path('profile', 'drop_jobs') . '/drop_jobs.install_callbacks.inc',
+  );
+
+  return $batch;
+}
+
+/**
+ * Task callback: configures the selected WYSIWYG editor.
+ *
+ * @see drop_jobs_install_tasks()
+ */
+function drop_jobs_install_wysiwyg() {
+  $lang = isset($install_state['locales'][0]->langcode)
+      ? $install_state['locales'][0]->langcode
+      : 'en';
+
+  $settings_full = array(
+    'default' => 1,
+    'user_choose' => 0,
+    'show_toggle' => 1,
+    'theme' => 'advanced',
+    'language' => $lang,
+    'buttons' => array(
+      'default' => array(
+        'Bold' => 1,
+        'Italic' => 1,
+        'Underline' => 1,
+        'JustifyLeft' => 1,
+        'JustifyCenter' => 1,
+        'JustifyRight' => 1,
+        'JustifyFull' => 1,
+        'Image' => 1,
+        'BulletedList' => 1,
+        'NumberedList' => 1,
+        'Undo' => 1,
+        'Redo' => 1,
+        'TextColor' => 1,
+        'BGColor' => 1,
+        'Blockquote' => 1,
+        'Link' => 1,
+        'Unlink' => 1,
+      ),
+//      'drupal' => array(
+//        'media' => 1,
+//      ),
+    ),
+    'toolbar_loc' => 'top',
+    'toolbar_align' => 'left',
+    'path_loc' => 'bottom',
+    'resizing' => 1,
+    'verify_html' => 1,
+    'preformatted' => 0,
+    'convert_fonts_to_spans' => 1,
+    'remove_linebreaks' => 1,
+    'apply_source_formatting' => 0,
+    'paste_auto_cleanup_on_paste' => 1,
+    'block_formats' => 'p,address,pre,h2,h3,h4,h5,h6,div',
+    'css_setting' => 'theme',
+    'css_path' => '',
+    'css_classes' => '',
+  );
+
+  $fields = array(
+    'format' => 'full_html',
+    'editor' => 'ckeditor',
+    'settings' => serialize($settings_full),
+  );
+
+  db_insert('wysiwyg')->fields($fields)->execute();
+
+  $settings_filtered = array(
+    'default' => 1,
+    'user_choose' => 0,
+    'show_toggle' => 1,
+    'theme' => 'advanced',
+    'language' => $lang,
+    'buttons' => array(
+      'default' => array(
+        'Bold' => 1,
+        'Italic' => 1,
+        'Underline' => 1,
+        'BulletedList' => 1,
+        'NumberedList' => 1,
+        'Undo' => 1,
+        'Redo' => 1,
+        'Link' => 1,
+        'Unlink' => 1,
+      ),
+    ),
+    'toolbar_loc' => 'top',
+    'toolbar_align' => 'left',
+    'path_loc' => 'bottom',
+    'resizing' => 1,
+    'verify_html' => 1,
+    'preformatted' => 0,
+    'convert_fonts_to_spans' => 1,
+    'remove_linebreaks' => 1,
+    'apply_source_formatting' => 0,
+    'paste_auto_cleanup_on_paste' => 1,
+    'block_formats' => 'p,address,pre,h2,h3,h4,h5,h6,div',
+    'css_setting' => 'theme',
+    'css_path' => '',
+    'css_classes' => '',
+  );
+
+  $fields = array(
+    'format' => 'filtered_html',
+    'editor' => 'ckeditor',
+    'settings' => serialize($settings_filtered),
+  );
+
+  db_insert('wysiwyg')->fields($fields)->execute();
+
+  db_update('filter_format')
+    ->condition('format', 'filtered_html')
+    ->fields(array('weight' => 1))
+    ->execute();
+
+  db_update('filter_format')
+    ->condition('format', 'full_html')
+    ->fields(array('weight' => 0))
+    ->execute();
+}
+
+/**
+ * array_filter() callback used to filter out already installed dependencies.
+ *
+ * @see drop_jobs_install_additional_modules()
+ */
+function _drop_jobs_filter_dependencies($dependency) {
+  return !module_exists($dependency);
+}
+
+/**
+ * Task callback: return a batch API array with taxonomy migrations to import.
+ */
+function drop_jobs_import_terms() {
+  // We need migrate module for this. Enable it now temporarily and, if the
+  // demo module doesn't get installed, disable it later.
+  // This is done so that we don't introduce a dependency on the migrate module
+  // for some core modules that only use it once to get the initial content
+  // imported.
+  module_enable(array('migrate'), FALSE);
+
+  // Run all Term migrations.
+  $migrations = migrate_migrations();
+  foreach ($migrations as $machine_name => $migration) {
+    if (strpos($machine_name, 'DropJobsTerm') === 0) {
+      $operations[] = array('_drop_jobs_import', array($machine_name, t('Importing taxonomy terms.')));
+    }
+  }
+
+  $batch = array(
+    'title' => t('Importing taxonomy terms'),
+    'operations' => $operations,
+    'finished' => 'drop_jobs_import_terms_finished',
+    'file' => drupal_get_path('profile', 'drop_jobs') . '/drop_jobs.install_callbacks.inc',
+  );
+
+  return $batch;
+}
+
+/**
+ * Task callback: return a batch API array with content migrations to import.
+ */
+function drop_jobs_import_content() {
+  $install_demo_content = variable_get('drop_jobs_install_demo_content', FALSE);
+  variable_del('drop_jobs_install_demo_content');
+
+  if ($install_demo_content) {
+    $operations = array();
+
+    // Run all available migrations, except for Term migrations, which have
+    // already been run.
+    $migrations = migrate_migrations();
+    foreach ($migrations as $machine_name => $migration) {
+      if (strpos($machine_name, 'DropJobsTerm') === FALSE) {
+        $operations[] = array('_drop_jobs_import', array($machine_name, t('Importing demo content.')));
+      }
+    }
+
+    $batch = array(
+      'title' => t('Importing demo content'),
+      'operations' => $operations,
+      'finished' => 'drop_jobs_import_content_finished',
+      'file' => drupal_get_path('profile', 'drop_jobs') . '/drop_jobs.install_callbacks.inc',
+    );
+
+    return $batch;
+  }
+  else {
+    // Since we're not installing demo content, it's now safe to disable
+    // the migrate module.
+    module_disable(array('migrate'), FALSE);
+  }
+}
+
+/**
+ * Task callback: performs final post-installation cleanup.
+ */
+function drop_jobs_cleanup() {
+  $operations = array();
+
+  // Flush caches before we do anything.
+  $operations[] = array('_drop_jobs_flush_caches', array(t('Flushed caches.')));
+
+  // For whatever reason our attempts to manually invoke Rules to set profile
+  // labels after migrations doesn't work during installation.
+  // Let's take matters into our own hands and iterate through all created
+  // profiles and make sure they get proper labels.
+  // If demo content wasn't installed, no worries, the loop won't run.
+  // We intentionally forego using profile2_load_multiple(FALSE) here in order
+  // to make this initial operation as cheap as possible. Since this is a Batch
+  // operation, it's ok to load each profile individually later.
+  $profiles =
+    db_select('profile', 'p')
+    ->fields('p', array('pid'))
+    ->execute()
+    ->fetchAll();
+
+  foreach ($profiles as $object) {
+    $operations[] = array('_drop_jobs_profile_labels', array($object->pid, t('Set profile labels.')));
+  }
+
+  // Revert all features.
+  $operations[] = array('_drop_jobs_revert_features', array(t('Reverting features.')));
+
+  // Rename block titles. This is just for a nicer UX out of the box.
+  $blocks = array(
+    // FacetAPI blocks.
+    'facetapi' => array(
+      // Resume facet blocks.
+      'zilcezy87cak1hql8x10bdd2kodyzqol' => 'Desired occupations',
+      'qvr3vh71qw7vkn1amgoaqdhqybvgy2jy' => 'Desired employment type',
+      'AvVY0BHvqsoVcz9ZxBmvYsVuQM0lFGjP' => 'Occupational fields',
+      'sQOtLjusI0qrFGplfscICm92Rc2Z3w1Q' => 'Degree levels',
+      'DwMg1ya2tzPyeKnmaQRnAr4hpnyXOawd' => 'Fields of study',
+      'JBOkbNYTr4PeL7SNr0FlESVEYN7DWyXJ' => 'Skills',
+      'kkvvp9qhmr4J0IppgNaWPVr0s3psv8tT' => 'Languages',
+      '0bVzrZRr0XoZzKtk2GfmB0otXckq5uTX' => 'Schools',
+      // Job facet blocks.
+      'ZsVIMdA6PRShtc1bF3nImuMZpT0wjftf' => 'Organizations',
+      '9PWgflD6G2ttZkP0vEDB9x799JeZnShr' => 'Fields of study',
+      'bs7Je7MVyzAoLVHZETZhHz1t0dTl3S9Q' => 'Occupational fields',
+      'yfKXu9TiqmC57xTbt5sJFAUVYcjHBBRa' => 'Employment types',
+      '3r1a4x24SvTETJp9q6LfV4J1jioL4yIh' => 'Skills',
+      'q29aExfsFLNQiqAOeYEx8tE6W5YyGTe9' => 'Degree levels',
+      '123ZakQutnazp9Q5VV4dGfR2iZyGNkFi' => 'Years of experience',
+      '2qCcJM3Q1Sx3mJAXmtIknJ8oQxoxhPBl' => 'Tags',
+    ),
+    // PCP blocks.
+    'pcp' => array(
+      'pcp-profile2-recruiter' => 'Profile Completeness',
+      'pcp-profile2-resume' => 'Résumé Completeness',
+    ),
+  );
+
+  foreach ($blocks as $module => $array) {
+    foreach ($array as $delta => $title) {
+      $operations[] = array('_drop_jobs_block_titles', array($module, $delta, $title, t('Setting block titles.')));
+    }
+  }
+
+  // Flush caches again for good measure.
+  $operations[] = array('_drop_jobs_flush_caches', array(t('Flushing caches one last time.')));
+
+  $batch = array(
+    'title' => t('Performing post-install cleanup'),
+    'operations' => $operations,
+    'finished' => 'drop_jobs_cleanup_finished',
+    'file' => drupal_get_path('profile', 'drop_jobs') . '/drop_jobs.install_callbacks.inc',
+  );
+
+  return $batch;
+}
+
+/**
+ * Implements hook_install().
+ *
+ * Perform actions to set up the site for this profile.
+ */
+function drop_jobs_install() {
+  drop_jobs_setup_themes();
+  $filtered_html_format = drop_jobs_setup_formats();
+  drop_jobs_setup_blocks();
+  drop_jobs_setup_content_types();
+  drop_jobs_setup_users();
+  drop_jobs_setup_tags();
+  drop_jobs_setup_fields();
+  drop_jobs_setup_permissions($filtered_html_format);
+  drop_jobs_setup_roles();
+  drop_jobs_setup_admin_views();
+
+  // Set up date defaults so it doesn't yell at us anymore.
+  variable_set('date_first_day', 0);
+  variable_set('date_format_long', 'l, F j, Y - H:i');
+  variable_set('date_format_medium', 'D, m-d-Y H:i');
+  variable_set('date_format_short', 'm-d-Y H:i');
+
+  // Enable transliteration.
+  variable_set('pathauto_transliterate', 1);
+  variable_set('transliteration_file_uploads', 1);
+  variable_set('transliteration_file_lowercase', 1);
+
+  // Cache Admin menu locally.
+  variable_set('admin_menu_cache_client', 1);
+
+  // Delete "main" profile2 profile. We define our own profile types so we can
+  // clear up the interface and avoid confusion by deleting the default profile
+  // type provided by Profile2.
+  $type = profile2_type_load('main');
+  if ($type instanceof ProfileType) {
+    profile2_type_delete($type);
+  }
+
+  // Enable Colorbox load.
+  variable_set('colorbox_load', 1);
+
+  // Remove Colorbox restrictions on admin paths.
+  $new_var = <<<EOT
+imagebrowser*
+img_assist*
+imce*
+print/*
+printpdf/*
+system/ajax
+system/ajax/*
+EOT;
+  variable_set('colorbox_pages', $new_var);
+
+  // Configure Chosen module.
+  variable_set('chosen_minimum', 10);
+  variable_set('chosen_jquery_selector', '.chosen-select');
+  variable_set('chosen_search_contains', 1);
+  variable_set('chosen_placeholder_text_multiple', 1);
+  variable_set('chosen_placeholder_text_multiple', 'Select some options');
+  variable_set('chosen_placeholder_text_single', 'Select an option');
+
+  // Set our fun slogan.
+  variable_set('site_slogan', 'More jobs than you can eat with a spoon!');
+
+  // Set frontpage to our welcome page.
+  variable_set('site_frontpage', 'welcome-to-drop-jobs');
+}
+
+/**
+ * Configure and enable Bartik and Fubik themes.
+ */
+function drop_jobs_setup_themes() {
+  // Enable Fubik theme.
+  db_update('system')
+    ->fields(array('status' => 1))
+    ->condition('type', 'theme')
+    ->condition('name', 'fubik')
+    ->execute();
+
+  // Set Fubik as admin theme.
+  variable_set('admin_theme', 'fubik');
+
+  // Enable Bartik theme.
+  db_update('system')
+    ->fields(array('status' => 1))
+    ->condition('type', 'theme')
+    ->condition('name', 'bartik')
+    ->execute();
+
+  // Set Bartik as default theme.
+  variable_set('theme_default', 'bartik');
+
+  // Basic theme settings.
+  variable_set('node_admin_theme', 1);
+  variable_set('user_pictures', 0);
+
+  // Extra theme settings.
+  $theme_settings = array(
+    'toggle_logo' => 1,
+    'default_logo' => 0,
+    'logo_path' => 'profiles/drop_jobs/logo.png',
+    'logo_upload' => '',
+  );
+
+  // Configure theme settings for Bartik & Fubik.
+  variable_set('theme_bartik_settings', $theme_settings);
+  variable_set('theme_fubik_settings', $theme_settings);
+
+  // Different logo for Seven.
+  $theme_settings['logo_path'] = 'profiles/drop_jobs/logo-seven.png';
+
+  // Configure logo for Seven so it shows up during installation.
+  variable_set('theme_seven_settings', $theme_settings);
+}
+
+/**
+ * Setup permissions for anonymous and authenticated users.
+ */
+function drop_jobs_setup_permissions($filtered_html_format) {
+  // Enable default permissions for system roles.
+  $filtered_html_permission = filter_permission_name($filtered_html_format);
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access content', $filtered_html_permission));
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('access content', 'cancel account', $filtered_html_permission));
+}
+
+/**
+ * Setup roles and permissions. We use Role Export's machine names here to
+ * make sure we have consistent role ids.
+ */
+function drop_jobs_setup_roles() {
+  // Create administrator role.
+  $admin = (object) array(
+    'name' => 'administrator',
+    'machine_name' => 'administrator',
+    'weight' => 2,
+  );
+  user_role_save($admin);
+
+  // Assign all available permissions to admin.
+  user_role_grant_permissions($admin->rid, array_keys(module_invoke_all('permission')));
+
+  // Set this as the administrator role.
+  variable_set('user_admin_role', $admin->rid);
+
+  // Assign user 1 the administrator role.
+  db_insert('users_roles')
+    ->fields(array('uid' => 1, 'rid' => $admin->rid))
+    ->execute();
+
+  // Create content admin role.
+  $content_admin = (object) array(
+    'name' => 'content admin',
+    'machine_name' => 'content_admin',
+    'weight' => 2,
+  );
+  user_role_save($content_admin);
+
+  // Assign permissions for core content types to content admin.
+  $content_admin_permissions = array(
+    'create article content',
+    'edit own article content',
+    'edit any article content',
+    'delete own article content',
+    'delete any article content',
+    'create page content',
+    'edit own page content',
+    'edit any page content',
+    'delete own page content',
+    'delete any page content',
+  );
+  user_role_grant_permissions($content_admin->rid, $content_admin_permissions);
+}
+
+/**
+ * Add text formats and set permissions.
+ */
+function drop_jobs_setup_formats() {
+  // Add text formats.
+  $filtered_html_format = array(
+    'format' => 'filtered_html',
+    'name' => 'Filtered HTML',
+    'weight' => 0,
+    'filters' => array(
+      // URL filter.
+      'filter_url' => array(
+        'weight' => 0,
+        'status' => 1,
+      ),
+      // HTML filter.
+      'filter_html' => array(
+        'weight' => 1,
+        'status' => 1,
+      ),
+      // Line break filter.
+      'filter_autop' => array(
+        'weight' => 2,
+        'status' => 1,
+      ),
+      // HTML corrector filter.
+      'filter_htmlcorrector' => array(
+        'weight' => 10,
+        'status' => 1,
+      ),
+    ),
+  );
+  $filtered_html_format = (object) $filtered_html_format;
+  filter_format_save($filtered_html_format);
+
+  $full_html_format = array(
+    'format' => 'full_html',
+    'name' => 'Full HTML',
+    'weight' => 1,
+    'filters' => array(
+      // URL filter.
+      'filter_url' => array(
+        'weight' => 0,
+        'status' => 1,
+      ),
+      // Line break filter.
+      'filter_autop' => array(
+        'weight' => 1,
+        'status' => 1,
+      ),
+      // HTML corrector filter.
+      'filter_htmlcorrector' => array(
+        'weight' => 10,
+        'status' => 1,
+      ),
+    ),
+  );
+  $full_html_format = (object) $full_html_format;
+  filter_format_save($full_html_format);
+
+  return $filtered_html_format;
+}
+
+/**
+ * Setup default blocks.
+ */
+function drop_jobs_setup_blocks() {
+  // Enable some standard blocks.
+  $default_theme = 'bartik';
+  $admin_theme = 'fubik';
+
+  $default_blocks = array(
+    array(
+      'module' => 'system',
+      'delta' => 'main',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'content',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'user',
+      'delta' => 'login',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'sidebar_first',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'navigation',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'sidebar_first',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'help',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'help',
+      'pages' => '',
+      'cache' => -1,
+    ),
+  );
+
+  $custom_blocks = array(
+    array(
+      'module' => 'drop_jobs',
+      'delta' => 'powered-by',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 10,
+      'region' => 'footer',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'main',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'content',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'help',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'help',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'user',
+      'delta' => 'login',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => 10,
+      'region' => 'content',
+      'pages' => '',
+      'cache' => -1,
+    ),
+  );
+
+  // Insert custom blocks as we would normally.
+  $query = db_insert('block')->fields(array('module', 'delta', 'theme', 'status', 'weight', 'region', 'pages', 'cache'));
+  foreach ($custom_blocks as $record) {
+    $query->values($record);
+  }
+  $query->execute();
+
+  // Insert core blocks using merge query to avoid unique index constraints.
+  foreach ($default_blocks as $value) {
+    db_merge('block')
+      ->key(
+        array('theme', 'module', 'delta'),
+        array($value['theme'], $value['module'], $value['delta'])
+      )
+      ->fields($value)
+      ->execute();
+  }
+}
+
+/**
+ * Setup default content types.
+ */
+function drop_jobs_setup_content_types() {
+  // Insert default pre-defined node types into the database. For a complete
+  // list of available node type attributes, refer to the node type API
+  // documentation at: http://api.drupal.org/api/HEAD/function/hook_node_info.
+  $types = array(
+    array(
+      'type' => 'page',
+      'name' => st('Basic page'),
+      'base' => 'node_content',
+      'description' => st("Use <em>basic pages</em> for your static content, such as an 'About us' page."),
+      'custom' => 1,
+      'modified' => 1,
+      'locked' => 0,
+    ),
+    array(
+      'type' => 'article',
+      'name' => st('Article'),
+      'base' => 'node_content',
+      'description' => st('Use <em>articles</em> for time-sensitive content like news, press releases or blog posts.'),
+      'custom' => 1,
+      'modified' => 1,
+      'locked' => 0,
+    ),
+  );
+
+  foreach ($types as $type) {
+    $type = node_type_set_defaults($type);
+    node_type_save($type);
+    node_add_body_field($type);
+  }
+
+  // Insert default pre-defined RDF mapping into the database.
+  $rdf_mappings = array(
+    array(
+      'type' => 'node',
+      'bundle' => 'page',
+      'mapping' => array(
+        'rdftype' => array('foaf:Document'),
+      ),
+    ),
+    array(
+      'type' => 'node',
+      'bundle' => 'article',
+      'mapping' => array(
+        'rdftype' => array('sioc:Item', 'foaf:Document'),
+        'field_image' => array(
+          'predicates' => array('og:image', 'rdfs:seeAlso'),
+          'type' => 'rel',
+        ),
+        'field_tags' => array(
+          'predicates' => array('dc:subject'),
+          'type' => 'rel',
+        ),
+      ),
+    ),
+  );
+  foreach ($rdf_mappings as $rdf_mapping) {
+    rdf_mapping_save($rdf_mapping);
+  }
+
+  // Default "Basic page" to not be promoted.
+  variable_set('node_options_page', array('status'));
+
+  // Don't display date and author information for "Basic page" nodes by default.
+  variable_set('node_submitted_page', FALSE);
+}
+
+/**
+ * Setup default user options.
+ */
+function drop_jobs_setup_users() {
+  // Enable user picture support and set the default to a square thumbnail option.
+  variable_set('user_pictures', '1');
+  variable_set('user_picture_dimensions', '1024x1024');
+  variable_set('user_picture_file_size', '800');
+  variable_set('user_picture_style', 'thumbnail');
+
+  // Allow visitor account creation without administrative approval.
+  variable_set('user_register', USER_REGISTER_VISITORS);
+
+  // Unpublish user's content when their account is cancelled.
+  variable_set('user_cancel_method', 'user_cancel_block_unpublish');
+
+  // Hide PCP block when profiles are complete.
+  variable_set('pcp_hide_block_on_complete', 1);
+}
+
+/**
+ * Setup default taxonomy vocabulary and fields.
+ */
+function drop_jobs_setup_tags() {
+  // Create a default vocabulary named "Tags", enabled for the 'article' content type.
+  $description = st('Use tags to group articles on similar topics into categories.');
+  $help = st('Enter a comma-separated list of words to describe your content.');
+  $vocabulary = (object) array(
+      'name' => 'Tags',
+      'description' => $description,
+      'machine_name' => 'tags',
+      'help' => $help,
+  );
+  taxonomy_vocabulary_save($vocabulary);
+
+  $field = array(
+    'field_name' => 'field_' . $vocabulary->machine_name,
+    'type' => 'taxonomy_term_reference',
+    // Set cardinality to unlimited for tagging.
+    'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    'settings' => array(
+      'allowed_values' => array(
+        array(
+          'vocabulary' => $vocabulary->machine_name,
+          'parent' => 0,
+        ),
+      ),
+    ),
+  );
+  field_create_field($field);
+
+  $instance = array(
+    'field_name' => 'field_' . $vocabulary->machine_name,
+    'entity_type' => 'node',
+    'label' => $vocabulary->name,
+    'bundle' => 'article',
+    'description' => $vocabulary->help,
+    'widget' => array(
+      'type' => 'taxonomy_autocomplete',
+      'weight' => -4,
+    ),
+    'display' => array(
+      'default' => array(
+        'type' => 'taxonomy_term_reference_link',
+        'weight' => 10,
+      ),
+      'teaser' => array(
+        'type' => 'taxonomy_term_reference_link',
+        'weight' => 10,
+      ),
+    ),
+  );
+  field_create_instance($instance);
+}
+
+/**
+ * Setup default fields for content types.
+ */
+function drop_jobs_setup_fields() {
+  // Create an image field named "Image", enabled for the 'article' content type.
+  // Many of the following values will be defaulted, they're included here as an illustrative examples.
+  // See http://api.drupal.org/api/function/field_create_field/7
+
+  $field = array(
+    'field_name' => 'field_image',
+    'type' => 'image',
+    'cardinality' => 1,
+    'translatable' => TRUE,
+    'locked' => FALSE,
+    'indexes' => array('fid' => array('fid')),
+    'settings' => array(
+      'uri_scheme' => 'public',
+      'default_image' => FALSE,
+    ),
+    'storage' => array(
+      'type' => 'field_sql_storage',
+      'settings' => array(),
+    ),
+  );
+  field_create_field($field);
+
+
+  // Many of the following values will be defaulted, they're included here as an illustrative examples.
+  // See http://api.drupal.org/api/function/field_create_instance/7
+  $instance = array(
+    'field_name' => 'field_image',
+    'entity_type' => 'node',
+    'label' => 'Image',
+    'bundle' => 'article',
+    'description' => st('Upload an image to go with this article.'),
+    'required' => FALSE,
+    'settings' => array(
+      'file_directory' => 'field/image',
+      'file_extensions' => 'png gif jpg jpeg',
+      'max_filesize' => '',
+      'max_resolution' => '',
+      'min_resolution' => '',
+      'alt_field' => TRUE,
+      'title_field' => '',
+    ),
+    'widget' => array(
+      'type' => 'image_image',
+      'settings' => array(
+        'progress_indicator' => 'throbber',
+        'preview_image_style' => 'thumbnail',
+      ),
+      'weight' => -1,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'large', 'image_link' => ''),
+        'weight' => -1,
+      ),
+      'teaser' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'medium', 'image_link' => 'content'),
+        'weight' => -1,
+      ),
+    ),
+  );
+  field_create_instance($instance);
+}
+
+/**
+ * Override default admin view provided by the Admin Views module.
+ */
+function drop_jobs_setup_admin_views() {
+  include_once 'drop_jobs.views_default.inc';
+
+  foreach (drop_jobs_views_default_views() as $view) {
+    if ($old_view = views_get_view($view->name, TRUE)) {
+      // Delete current View.
+      $old_view->delete();
+      // Replace it with our own.
+      $view->save();
+    }
+  }
+}

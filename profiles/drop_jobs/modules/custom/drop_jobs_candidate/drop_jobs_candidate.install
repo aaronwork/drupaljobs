@@ -1,0 +1,17 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Candidate installation hooks.
+ */
+
+/**
+ * Implements hook_install().
+ *
+ * Make sure this runs after Views.
+ */
+function drop_jobs_candidate_install() {
+  db_update('system')
+    ->fields(array('weight' => 11))
+    ->condition('name', 'drop_jobs_candidate', '=')
+    ->execute();
+}

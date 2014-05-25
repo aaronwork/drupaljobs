@@ -1,0 +1,16 @@
+/* Drop Jobs Recommendation Admin styles */
+
+/* Admin Recommendation Links */
+
+body.page-admin-drop-jobs-recommendations #page-title .page-title span.icon,
+body.page-dashboard-job-recommendations #page-title .page-title span.icon,
+#block-menu-menu-drop-jobs-admin li.recommendations a,
+#block-menu-menu-drop-jobs-dashboard li.job-recommendations a,
+table.drop_jobs_dashboard td.recommendations a.drop_jobs_admin_link,
+table.drop_jobs_dashboard td.job-recommendations a.drop_jobs_admin_link {
+  background-image: url('../images/recommendation.png');
+}
+
+body.page-dashboard-job-recommendations #page-title .page-title span.icon {
+  background-position: 0 -92px !important;
+}

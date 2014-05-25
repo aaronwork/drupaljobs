@@ -1,0 +1,64 @@
+name = Drop Jobs
+description = Start with a full-featured Job and Résumé Search website. The Drop Jobs distribution is brought to you by Alex and friends.
+core = 7.x
+
+; The distribution_name property is used in the installer and other places as
+; a label for the software being installed.
+distribution_name = Drop Jobs
+
+; The exclusive flag auto-selects the profile during installation, if there
+; are no other exclusive ones.
+exclusive = TRUE
+
+; Core.
+dependencies[] = block
+dependencies[] = contextual
+dependencies[] = dblog
+dependencies[] = field
+dependencies[] = field_ui
+dependencies[] = file
+dependencies[] = filter
+dependencies[] = help
+dependencies[] = image
+dependencies[] = list
+dependencies[] = menu
+dependencies[] = number
+dependencies[] = options
+dependencies[] = path
+dependencies[] = rdf
+dependencies[] = shortcut
+dependencies[] = taxonomy
+
+; Contrib.
+dependencies[] = admin_views
+dependencies[] = better_exposed_filters
+dependencies[] = content_taxonomy_autocomplete
+dependencies[] = context
+dependencies[] = facetapi
+dependencies[] = features
+dependencies[] = flag
+dependencies[] = jquery_update
+dependencies[] = role_export
+dependencies[] = rules
+dependencies[] = taxonomy_access_fix
+dependencies[] = variable
+dependencies[] = views
+
+; Drop Jobs.
+dependencies[] = drop_jobs_core
+dependencies[] = drop_jobs_candidate
+dependencies[] = drop_jobs_recruiter
+dependencies[] = drop_jobs_organization
+dependencies[] = drop_jobs_job
+dependencies[] = drop_jobs_search
+
+; System Requirements.
+php_memory_limit = 128M
+
+files[] = drop_jobs.profile
+; Information added by drupal.org packaging script on 2013-02-15
+version = "7.x-1.0-alpha10"
+core = "7.x"
+project = "drop_jobs"
+datestamp = "1360942887"
+

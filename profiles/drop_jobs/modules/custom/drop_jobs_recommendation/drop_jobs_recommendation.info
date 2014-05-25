@@ -1,0 +1,36 @@
+name = Drop Jobs Recommendation
+description = Recommends Jobs for Candidates and vice versa.
+core = 7.x
+package = Drop Jobs
+php = 5.2.4
+project = drop_jobs_recommendation
+dependencies[] = drop_jobs_candidate
+dependencies[] = drop_jobs_core
+dependencies[] = drop_jobs_job
+dependencies[] = entity
+dependencies[] = features
+dependencies[] = variable
+dependencies[] = views
+configure = admin/config/drop-jobs/recommendation
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:1
+features[menu_links][] = menu-drop-jobs-admin:admin/drop-jobs/recommendations
+features[menu_links][] = menu-drop-jobs-dashboard:dashboard/job-recommendations
+features[user_permission][] = administer drop_jobs recommendations
+features[user_permission][] = delete own drop_jobs recommendations
+features[user_permission][] = view drop_jobs recommendations
+features[views_view][] = drop_jobs_job_recommendation_admin
+features[views_view][] = drop_jobs_recommendation_my_recommendations
+files[] = drop_jobs_recommendation.controller.inc
+files[] = drop_jobs_recommendation.entity.inc
+files[] = drop_jobs_recommendation.info.inc
+files[] = drop_jobs_recommendation.migrate.inc
+files[] = drop_jobs_recommendation.views.inc
+files[] = views/views_handler_field_recommendation_operations.inc
+
+; Information added by drupal.org packaging script on 2013-02-15
+version = "7.x-1.0-alpha10"
+core = "7.x"
+project = "drop_jobs"
+datestamp = "1360942887"
+

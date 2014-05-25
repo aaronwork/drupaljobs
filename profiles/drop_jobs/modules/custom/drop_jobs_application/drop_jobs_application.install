@@ -1,0 +1,342 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Application installation hooks.
+ */
+
+/**
+ * Implements hook_install().
+ *
+ * Make sure we run after Views.
+ * We need this to alter a menu item defined by a View.
+ */
+function drop_jobs_application_install() {
+  db_update('system')
+    ->fields(array('weight' => 11))
+    ->condition('name', 'drop_jobs_application', '=')
+    ->execute();
+}
+
+/**
+ * Implements hook_schema().
+ */
+function drop_jobs_application_schema() {
+  $schema = array(
+    'drop_jobs_application' => array(
+      'description' => 'Stores Job Applications.',
+      'fields' => array(
+        'aid' => array(
+          'type' => 'serial',
+          'not null' => TRUE,
+          'description' => 'Primary Key: Unique Job Application ID.'
+        ),
+        'type' => array(
+          'description' => 'The {drop_jobs_application_type}.type of this application.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'uid' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+          'default' => NULL,
+          'description' => "The {users}.uid of the associated user.",
+        ),
+        'nid' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+          'default' => NULL,
+          'description' => "The {node}.nid of the associated job.",
+        ),
+        'created' => array(
+          'description' => 'The Unix timestamp when the application was created.',
+          'type' => 'int',
+          'not null' => FALSE,
+        ),
+        'changed' => array(
+          'description' => 'The Unix timestamp when the application was most recently saved.',
+          'type' => 'int',
+          'not null' => FALSE,
+        ),
+        'status' => array(
+          'description' => "Integer indicating the application's workflow state. 0 = new, 1 = read, 2 = hidden, 3 = revoked",
+          'type' => 'int',
+          'not null' => TRUE,
+          'default' => 1,
+        ),
+      ),
+      'indexes' => array(
+        'uid' => array('uid'),
+        'nid' => array('nid'),
+        'status' => array('status'),
+      ),
+      'foreign keys' => array(
+        'uid' => array(
+          'table' => 'users',
+          'columns' => array('uid' => 'uid'),
+        ),
+        'nid' => array(
+          'table' => 'node',
+          'columns' => array('nid' => 'nid'),
+        ),
+        'type' => array(
+          'table' => 'drop_jobs_application_type',
+          'columns' => array('type' => 'type'),
+        ),
+      ),
+      'primary key' => array('aid'),
+    ),
+    'drop_jobs_application_type' => array(
+      'description' => 'Stores information about all defined application types.',
+      'fields' => array(
+        'id' => array(
+          'type' => 'serial',
+          'not null' => TRUE,
+          'description' => 'Primary Key: Unique application type ID.',
+        ),
+        'type' => array(
+          'description' => 'The machine-readable name of this application type.',
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => TRUE,
+        ),
+        'label' => array(
+          'description' => 'The human-readable name of this application type.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'weight' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'default' => 0,
+          'size' => 'tiny',
+          'description' => 'The weight of this application type in relation to others.',
+        ),
+        'data' => array(
+          'type' => 'text',
+          'not null' => FALSE,
+          'size' => 'big',
+          'serialize' => TRUE,
+          'description' => 'A serialized array of additional data related to this application type.',
+        ),
+        'status' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          // Set the default to ENTITY_CUSTOM without using the constant as it is
+          // not safe to use it at this point.
+          'default' => 0x01,
+          'size' => 'tiny',
+          'description' => 'The exportable status of the entity.',
+        ),
+        'module' => array(
+          'description' => 'The name of the providing module if the entity has been defined in code.',
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => FALSE,
+        ),
+        'description' => array(
+          'description' => 'A brief description of this application type.',
+          'type' => 'text',
+          'not null' => TRUE,
+          'size' => 'medium',
+          'translatable' => TRUE,
+        ),
+      ),
+      'primary key' => array('id'),
+      'unique keys' => array(
+        'type' => array('type'),
+      ),
+    ),
+    'drop_jobs_application_statistics' => array(
+      'description' => 'Stores information about application statistics.',
+      'fields' => array(
+        'nid' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+          'description' => 'The {node}.nid for which the statistics are compiled.',
+        ),
+        'last_application_aid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'default' => 0,
+          'description' => 'The {drop_jobs_application}.aid of the last application.',
+        ),
+        'last_application_timestamp' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'default' => 0,
+          'description' => 'The Unix timestamp of the last application that was posted within this node, from {drop_jobs_application}.changed.',
+        ),
+        'last_application_name' => array(
+          'type' => 'varchar',
+          'length' => 60,
+          'not null' => FALSE,
+          'description' => 'The name of the latest author to post a application to this node.',
+        ),
+        'last_application_uid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'default' => 0,
+          'description' => 'The user ID of the latest author to post a application on this node, from {drop_jobs_application}.uid.',
+        ),
+        'application_count' => array(
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+          'description' => 'The total number of applications on this node.',
+        ),
+      ),
+      'primary key' => array('nid'),
+      'indexes' => array(
+        'node_application_timestamp' => array('last_application_timestamp'),
+        'application_count' => array('application_count'),
+        'last_application_uid' => array('last_application_uid'),
+      ),
+      'foreign keys' => array(
+        'statistics_node' => array(
+          'table' => 'node',
+          'columns' => array('nid' => 'nid'),
+        ),
+        'last_application_author' => array(
+          'table' => 'users',
+          'columns' => array(
+            'last_application_uid' => 'uid',
+          ),
+        ),
+      ),
+    ),
+  );
+
+  // Support EntityCache module.
+  $schema['cache_entity_drop_jobs_application'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_entity_drop_jobs_application']['description'] = "Cache table used to store Job Application entity records.";
+
+  return $schema;
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function drop_jobs_application_requirements($phase) {
+  $requirements = array();
+
+  if ($phase == 'runtime') {
+    $t = get_t();
+
+    // Load application types.
+    $types = drop_jobs_application_get_types();
+
+    if (empty($types)) {
+      $requirements['drop_jobs_application'] = array(
+        'title' => $t('Drop Job Application'),
+        'value' => $t('No application types created'),
+        'severity' => REQUIREMENT_ERROR,
+        'description' => $t('You must create at least one <a href="@link">application type</a>', array('@link' => '/admin/structure/job_applications')),
+      );
+    }
+    else {
+      $requirements['drop_jobs_application'] = array(
+        'title' => $t('Drop Job Application'),
+        'severity' => REQUIREMENT_OK,
+        'value' => $t('At least one application type created')
+      );
+    }
+
+    if (variable_get('file_private_path', NULL)) {
+      $requirements['drop_jobs_file_private_path'] = array(
+        'title' => $t('Private File System Path'),
+        'severity' => REQUIREMENT_OK,
+        'value' => $t('OK'),
+      );
+    }
+    else {
+      $requirements['drop_jobs_file_private_path'] = array(
+        'title' => $t('Private File System Path'),
+        'value' => $t('Not OK.'),
+        'severity' => REQUIREMENT_ERROR,
+        'description' => $t('You need to configure a private file system path in order to allow candidates to safely attach their CVs when applying for jobs. Click <a href="@link">here</a> to do it now.', array('@link' => url('admin/config/media/file-system', array('absolute' => TRUE)))),
+      );
+    }
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function drop_jobs_application_enable() {
+  // Insert records into the drop_jobs_application_statistics for nodes that are missing.
+  $query = db_select('node', 'n');
+  $query->leftJoin('drop_jobs_application_statistics', 'djas', 'djas.nid = n.nid');
+  $query->addField('n', 'created', 'last_application_timestamp');
+  $query->addField('n', 'uid', 'last_application_uid');
+  $query->addField('n', 'nid');
+  $query->addExpression('0', 'application_count');
+  $query->addExpression('NULL', 'last_application_name');
+  $query->isNull('djas.application_count');
+
+  db_insert('drop_jobs_application_statistics')
+    ->from($query)
+    ->execute();
+
+  // Rebuild the features static caches.
+  features_include(TRUE);
+
+  $module = 'drop_jobs_application';
+  $feature = feature_load($module);
+  $items[$module] = array_keys($feature->info['features']);
+  _features_restore('enable', $items);
+  _features_restore('rebuild', $items);
+}
+
+/**
+ * Implements hook_disable().
+ */
+function drop_jobs_application_disable() {
+  // Delete used Views. Since Features doesn't do this let's try to cleanup
+  // after ourselves.
+  module_load_include('inc', 'drop_jobs_application', 'drop_jobs_application.views_default');
+  $views = drop_jobs_application_views_default_views();
+
+  while (!empty($views)) {
+    $obj = array_pop($views);
+
+    if ($view = views_get_view($obj->name)) {
+      views_delete_view($view);
+    }
+  }
+}
+
+/**
+ * Create and initialize drop_jobs_application_statistics table.
+ */
+function drop_jobs_application_update_7000() {
+  db_create_table('drop_jobs_application_statistics', drupal_get_schema('drop_jobs_application_statistics'));
+  drop_jobs_application_enable();
+  return t('Created drop_jobs_application_statistics table.');
+}
+
+/**
+ * Rename application statistics aid column.
+ */
+function drop_jobs_application_update_7001() {
+  db_query("ALTER TABLE drop_jobs_application_statistics CHANGE aid last_application_aid INT( 11 ) NOT NULL DEFAULT  '0'")->execute();
+  return t('Renamed application statistics aid column.');
+}
+
+/**
+ * Create "cache_entity_drop_jobs_application" table.
+ */
+function drop_jobs_application_update_7002() {
+  $schema = drupal_get_schema('cache_entity_drop_jobs_application', TRUE);
+  db_create_table('cache_entity_drop_jobs_application', $schema);
+}

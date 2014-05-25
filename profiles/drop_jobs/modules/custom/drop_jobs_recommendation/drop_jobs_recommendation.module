@@ -1,0 +1,554 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Job Recommendation module.
+ */
+include_once('drop_jobs_recommendation.features.inc');
+include_once('drop_jobs_recommendation.actions.inc');
+
+/**
+ * Implements hook_permission().
+ */
+function drop_jobs_recommendation_permission() {
+  return array(
+    'administer drop_jobs recommendations' => array(
+      'title' => t('Administer recommendations'),
+    ),
+    'delete own drop_jobs recommendations' => array(
+      'title' => t('Delete own recommendations'),
+    ),
+    'view drop_jobs recommendations' => array(
+      'title' => t('View recommendations'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_init().
+ */
+function drop_jobs_recommendation_init() {
+  // Add admin section styles.
+  if (drop_jobs_core_is_admin_page()) {
+    drupal_add_css(drupal_get_path('module', 'drop_jobs_recommendation') . '/css/drop_jobs_recommendation_admin.css');
+  }
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function drop_jobs_recommendation_entity_info() {
+  $info = array();
+
+  $info['drop_jobs_recommendation'] = array(
+    'label' => t('Job Recommendation'),
+    'entity class' => 'DropJobsRecommendation',
+    'controller class' => 'DropJobsRecommendationController',
+    'base table' => 'drop_jobs_recommendation',
+    'fieldable' => FALSE,
+    'entity keys' => array(
+      'id' => 'rid',
+    ),
+    'bundles' => array(),
+    'uri callback' => 'entity_class_uri',
+    'label callback' => 'entity_class_label',
+    'access callback' => 'drop_jobs_recommendation_access',
+    'module' => 'drop_jobs_recommendation',
+    'metadata controller class' => 'DropJobsRecommendationMetadataController',
+    'views controller class' => 'DropJobsRecommendationViewsController',
+  );
+
+  // Support entity cache module.
+  if (module_exists('entitycache')) {
+    $info['recommendation']['entity cache'] = TRUE;
+    // Entity cache obsoletes field cache.
+    $info['recommendation']['field cache'] = FALSE;
+  }
+
+  return $info;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function drop_jobs_recommendation_menu() {
+  $items = array();
+
+  // Admin settings form.
+  $items['admin/config/drop-jobs/recommendation'] = array(
+    'title' => 'Recommendation',
+    'description' => 'Configure Job Recommendations.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_recommendation_settings'),
+    'access arguments' => array('administer drop_jobs recommendations'),
+    'file' => 'drop_jobs_recommendation.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  // For the sake of convenience.
+  $recommendation_uri = 'recommendation/%drop_jobs_recommendation';
+  $recommendation_uri_argument_position = 1;
+
+  // View recommendation.
+  $items[$recommendation_uri] = array(
+    'title callback' => 'drop_jobs_recommendation_page_title',
+    'title arguments' => array($recommendation_uri_argument_position),
+    'page callback' => 'drop_jobs_recommendation_view',
+    'page arguments' => array($recommendation_uri_argument_position),
+    'access callback' => 'entity_access',
+    'access arguments' => array('view', 'drop_jobs_recommendation', $recommendation_uri_argument_position),
+  );
+
+  $items[$recommendation_uri . '/view'] = array(
+    'title' => 'View',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+
+  // Edit recommendation.
+  $items[$recommendation_uri . '/edit'] = array(
+    'title' => 'Edit',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_recommendation_form', $recommendation_uri_argument_position),
+    'access callback' => 'entity_access',
+    'access arguments' => array('edit', 'drop_jobs_recommendation', $recommendation_uri_argument_position),
+    'file' => 'drop_jobs_recommendation.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+  );
+
+  // Delete recommendation.
+  $items[$recommendation_uri . '/delete'] = array(
+    'title' => 'Delete recommendation',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_recommendation_delete_form', $recommendation_uri_argument_position),
+    'access callback' => 'entity_access',
+    'access arguments' => array('edit', 'drop_jobs_recommendation', $recommendation_uri_argument_position),
+    'file' => 'drop_jobs_recommendation.admin.inc',
+  );
+
+  // Devel integration.
+  if (module_exists('devel')) {
+    $devel_path = drupal_get_path('module', 'devel');
+    $items[$recommendation_uri . '/devel'] = array(
+      'title' => 'Devel',
+      'page callback' => 'devel_load_object',
+      'file' => 'devel.pages.inc',
+      'file path' => $devel_path,
+      'page arguments' => array('drop_jobs_recommendation', $recommendation_uri_argument_position),
+      'access arguments' => array('access devel information'),
+      'type' => MENU_LOCAL_TASK,
+      'weight' => 100,
+    );
+
+    $items[$recommendation_uri . '/devel/load'] = array(
+      'title' => 'Load',
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+    );
+
+    $items[$recommendation_uri . '/devel/render'] = array(
+      'title' => 'Render',
+      'page callback' => 'devel_render_object',
+      'page arguments' => array('drop_jobs_recommendation', $recommendation_uri_argument_position),
+      'access arguments' => array('access devel information'),
+      'file' => 'devel.pages.inc',
+      'file path' => $devel_path,
+      'type' => MENU_LOCAL_TASK,
+      'weight' => 100,
+    );
+  }
+
+  return $items;
+}
+
+/**
+ * Determines whether the given user has access to a recommendation operation.
+ *
+ * @param $op
+ *   The operation being performed. One of 'view', 'update', 'create', 'delete'
+ *   or just 'edit' (being the same as 'create' or 'update').
+ * @param $recommendation
+ *   Optionally a recommendation to check access for. If nothing is given,
+ *    access for all recommendations is determined.
+ * @param $account
+ *   The user to check for. Leave it to NULL to check for the current user.
+ * @return boolean
+ *   Whether access is allowed or not.
+ */
+function drop_jobs_recommendation_access($op, $recommendation = NULL, $account = NULL) {
+  if (!isset($account)) {
+    $account = user_uid_optional_load();
+  }
+
+  if (user_access('administer drop_jobs recommendations')) {
+    return TRUE;
+  }
+
+  $node = node_load($recommendation->nid);
+  $own_recommendation = ($account->uid == $recommendation->uid || $account->uid == $node->uid);
+
+  switch ($op) {
+    case 'delete':
+      return user_access('delete own drop_jobs recommendations') && $own_recommendation;
+    case 'view':
+      // Allow the user to view the recommendation of its for him or
+      // from one of his jobs.
+      return user_access('view drop_jobs recommendations') && $own_recommendation;
+    default:
+      return FALSE;
+  }
+}
+
+/**
+ * Menu title callback.
+ * Returns page title for recommendation-related menu items.
+ *
+ * @param DropJobsRecommendation
+ *   The $recommendation we want to get a title for.
+ * @return string
+ *   The recommendation's label.
+ *
+ * @see drop_jobs_recommendation_menu()
+ */
+function drop_jobs_recommendation_page_title(DropJobsRecommendation $recommendation) {
+  return $recommendation->label();
+}
+
+/**
+ * Deletes a recommendation.
+ *
+ * @param DropJobsRecommendation
+ *   The recommendation object.
+ */
+function drop_jobs_recommendation_delete(DropJobsRecommendation $recommendation) {
+  $recommendation->delete();
+}
+
+/**
+ * Delete multiple recommendations.
+ *
+ * @param array
+ *   An array of recommendation IDs.
+ */
+function drop_jobs_recommendation_delete_multiple(array $rids) {
+  // Bypass the traditional entity_get_controller() approach because we
+  // need to cancel each recommendation before its deleted.
+  foreach ($rids as $rid) {
+    if ($recommendation = drop_jobs_recommendation_load($rid)) {
+      drop_jobs_recommendation_delete($recommendation);
+    }
+  }
+}
+
+/**
+ * Create a new recommendation object.
+ *
+ * @param $values
+ *   An array of values to initialize the recommendation with.
+ * @return DropJobsRecommendation
+ *   The newly-created recommendation object.
+ */
+function drop_jobs_recommendation_create(array $values) {
+  return new DropJobsRecommendation($values);
+}
+
+/**
+ * Saves a recommendation.
+ *
+ * @param $recommendation
+ *   The recommendation object.
+ * @return boolean
+ *   Whether the recommendation was saved successfully.
+ */
+function drop_jobs_recommendation_save(DropJobsRecommendation $recommendation) {
+  return $recommendation->save();
+}
+
+/**
+ * Fetch a recommendation object.
+ *
+ * @param $rid
+ *   Integer specifying the recommendation id.
+ * @param $reset
+ *   A boolean indicating that the internal cache should be reset.
+ * @return
+ *   A fully-loaded $recommendation object or FALSE if it cannot be loaded.
+ *
+ * @see drop_jobs_recommendation_load_multiple()
+ */
+function drop_jobs_recommendation_load($rid, $reset = FALSE) {
+  $recommendations = drop_jobs_recommendation_load_multiple(array($rid), array(), $reset);
+  return reset($recommendations);
+}
+
+/**
+ * Load multiple recommendations based on certain conditions.
+ *
+ * @param $rids
+ *   An array of recommendation IDs.
+ * @param $conditions
+ *   An array of conditions to match against the {drop_jobs_recommendation} table.
+ * @param $reset
+ *   A boolean indicating that the internal cache should be reset.
+ * @return
+ *   An array of recommendation objects, indexed by ID.
+ *
+ * @see entity_load()
+ * @see drop_jobs_recommendation_load()
+ * @see drop_jobs_recommendation_load_by_user()
+ */
+function drop_jobs_recommendation_load_multiple($rids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('drop_jobs_recommendation', $rids, $conditions, $reset);
+}
+
+// @TODO load by user/job functions
+
+/**
+ * DropJobsRecommendation view callback.
+ * Displays a recommendation entity.
+ *
+ * This is here as opposed to in drop_jobs_recommendation.pages.inc because if Devel is enabled
+ * clicking on Devel->Render will trigger an error as the include is not
+ * automatically included in that case.
+ *
+ * @param DropJobsRecommendation
+ *   The $recommendation we want to view.
+ * @return string
+ *   The rendered recommendation entity.
+ *
+ * @see drop_jobs_recommendation_menu()
+ */
+function drop_jobs_recommendation_view(DropJobsRecommendation $recommendation) {
+  drupal_set_title(entity_label('drop_jobs_recommendation', $recommendation));
+  return entity_view('drop_jobs_recommendation', array(entity_id('drop_jobs_recommendation', $recommendation) => $recommendation), 'full');
+}
+
+/**
+ * Implements hook_cron().
+ */
+function drop_jobs_recommendation_cron() {
+  if (variable_get_value('drop_jobs_recommendation_candidate_enable') || variable_get_value('drop_jobs_recommendation_job_enable')) {
+    // Find Job Recommendations for candidates. This actually works both ways
+    // as if a job is recommended for a candidate we can safely assume that
+    // that candidate would be recommended for that job.
+    $candidates = drop_jobs_candidate_get_pids();
+
+    if (!empty($candidates)) {
+      $queue = DrupalQueue::get('drop_jobs_recommendation_queue');
+      foreach ($candidates as $pid) {
+        $queue->createItem($pid);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function drop_jobs_recommendation_cron_queue_info() {
+  return array(
+    'drop_jobs_recommendation_queue' => array(
+      'worker callback' => 'drop_jobs_recommendation_cron_run',
+      'time' => 15,
+    ),
+  );
+}
+
+/**
+ * Worker callback.
+ *
+ * Finds Job Recommendations for a given candidate.
+ *
+ * @param integer
+ *   The resume profile id.
+ *
+ * @see drop_jobs_recommendation_cron()
+ * @see drop_jobs_recommendation_cron_queue_info()
+ */
+function drop_jobs_recommendation_cron_run($pid) {
+  if ($profile = profile2_load($pid)) {
+    if ($profile->type === 'resume') {
+      // @TODO implement this.
+//      $jobs = drop_jobs_recommendation_find($resume);
+//      include_once drupal_get_path('module', 'devel') . '/krumo/class.krumo.php';
+//      krumo($jobs);die;
+    }
+  }
+}
+
+/**
+ * Find Job Recommendations for a given candidate.
+ *
+ * @param Profile
+ *   The resume profile object.
+ * @return array
+ *   An array of recommended jobs, keyed by nid.
+ */
+function drop_jobs_recommendation_find(Profile $resume) {
+  // @TODO implement this.
+//  include_once drupal_get_path('module', 'devel') . '/krumo/class.krumo.php';
+//  krumo($resume);
+//  die;
+}
+
+/**
+ * Returns a map of job fields to resume fields.
+ *
+ * @return array
+ *   An array where the key is the job field and value is corresponding
+ *   resume field.
+ */
+function drop_jobs_recommendation_map() {
+  $map = array();
+
+  $map['field_job_field'] = 'field_resume_exp_field';
+  $map['field_job_study'] = 'field_resume_edu_field';
+  $map['field_job_type'] = 'field_resume_pref_occupation';
+  $map['field_job_languages'] = 'field_resume_language';
+  $map['field_job_experience'] = 'field_resume_exp_time';
+  $map['title'] = 'field_resume_pref_title';
+
+  // Allow the map to be altered.
+  drupal_alter('drop_jobs_recommendation', $map);
+  return $map;
+}
+
+/**
+ * Returns the bias for each job recommendation field.
+ *
+ * @return array
+ *   An array where the key is the field and the value is the bias.
+ */
+function drop_jobs_recommendation_bias() {
+  $fields = array();
+
+  foreach (drop_jobs_recommendation_map() as $job_field => $resume_field) {
+    $fields[$job_field] = variable_get("djrb_{$job_field}", 0);
+  }
+
+  return $fields;
+}
+
+/**
+ * Implements hook_variable_info().
+ */
+function drop_jobs_recommendation_variable_info() {
+  $variables = array();
+
+  $variables['drop_jobs_recommendation_candidate_enable'] = array(
+    'title' => t('Recommend jobs for candidates'),
+    'default' => FALSE,
+    'type' => 'boolean',
+    'group' => 'drop_jobs_recommendation',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_recommendation_candidate_subs'] = array(
+    'title' => t('Recommend jobs only for candidates with active recommendations'),
+    'default' => FALSE,
+    'type' => 'boolean',
+    'group' => 'drop_jobs_recommendation',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_recommendation_candidate_subs_plans'] = array(
+    'title' => t('Recommend jobs only for candidates with active recommendations of plans'),
+    'default' => array(),
+    'type' => 'options',
+    'group' => 'drop_jobs_recommendation',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_recommendation_job_enable'] = array(
+    'title' => t('Recommend candidates for jobs'),
+    'default' => FALSE,
+    'type' => 'boolean',
+    'group' => 'drop_jobs_recommendation',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_recommendation_job_subs'] = array(
+    'title' => t("Recommend candidates only for jobs who's recruiters have active recommendations"),
+    'default' => FALSE,
+    'type' => 'boolean',
+    'group' => 'drop_jobs_recommendation',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_recommendation_job_subs_plans'] = array(
+    'title' => t('Recommend candidates only for jobs with active recommendations of plans'),
+    'default' => array(),
+    'type' => 'options',
+    'group' => 'drop_jobs_recommendation',
+    'token' => FALSE,
+  );
+
+  return $variables;
+}
+
+/**
+ * Implements hook_help().
+ */
+function drop_jobs_recommendation_help($path, $arg) {
+  switch ($path) {
+    case 'dashboard/my-recommendations':
+      return t('Here you can view, edit and delete your recommendations.');
+    case 'admin/config/drop-jobs/recommendation':
+      return t('Here you can configure settings for job recommendations. This module can both recommend jobs for candidates as well as candidates for jobs.');
+    case 'admin/drop-jobs/recommendations':
+      return t('Here you can view, edit and delete all job recommendations.');
+      break;
+  }
+}
+
+/**
+ * Returns fields attached to an entity bundle.
+ *
+ * @param string
+ *   The entity $type.
+ * @param string
+ *   The entity $bundle.
+ * @param boolean
+ *   Whether to expand field collection fields or not.
+ *   If this is set, field collections will be parsed and only their attached
+ *   fields will be added to the return array.
+ * @return array
+ *   An array of fields, keyed by field name.
+ */
+function drop_jobs_recommendation_entity_get_fields($type, $bundle, $recursive = TRUE) {
+  // Use the advanced drupal_static() pattern, since this is called very often.
+  static $drupal_static_fast;
+
+  if (!isset($drupal_static_fast)) {
+    $drupal_static_fast['fields'] = &drupal_static(__FUNCTION__);
+  }
+  $fields = &$drupal_static_fast['fields'];
+
+  if (!isset($fields[$type][$bundle])) {
+    $fields[$type][$bundle] = array();
+    $info = entity_get_property_info($type);
+    $field_collections = array();
+
+    foreach ($info['bundles'][$bundle]['properties'] as $name => $property) {
+      if (strpos($name, 'field_') === 0) {
+        if (!$recursive || ($property['type'] !== 'list<field_collection_item>' && $property['type'] !== 'field_collection_item')) {
+          $fields[$type][$bundle][$name] = $property;
+        }
+        else {
+          $field_collections[] = $property['bundle'];
+        }
+      }
+    }
+
+    if ($recursive) {
+      $info = entity_get_property_info('field_collection_item');
+
+      foreach ($field_collections as $collection) {
+        foreach ($info['bundles'][$collection]['properties'] as $name => $property) {
+          $fields[$type][$bundle][$name] = $property;
+        }
+      }
+    }
+  }
+
+  return $fields[$type][$bundle];
+}

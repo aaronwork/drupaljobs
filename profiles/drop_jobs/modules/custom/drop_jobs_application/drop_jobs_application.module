@@ -1,0 +1,1007 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Application module.
+ */
+
+include_once('drop_jobs_application.features.inc');
+include_once('drop_jobs_application.actions.inc');
+
+/**
+ * Application states.
+ */
+define('DROP_JOBS_APPLICATION_NEW', 0);
+define('DROP_JOBS_APPLICATION_READ', 1);
+define('DROP_JOBS_APPLICATION_HIDDEN', 2);
+define('DROP_JOBS_APPLICATION_REVOKED', 3);
+
+/**
+ * Constants for email notification frequency.
+ */
+define('DROP_JOBS_APPLICATION_EMAIL_NONE', 0);
+define('DROP_JOBS_APPLICATION_EMAIL_DAILY', 1);
+define('DROP_JOBS_APPLICATION_EMAIL_WEEKLY', 2);
+define('DROP_JOBS_APPLICATION_EMAIL_ALL', 3);
+
+/**
+ * Implements hook_init().
+ */
+function drop_jobs_application_init() {
+  // Add admin section styles.
+  if (drop_jobs_core_is_admin_page()) {
+    drupal_add_css(drupal_get_path('module', 'drop_jobs_application') . '/css/drop_jobs_application_admin.css');
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function drop_jobs_application_menu() {
+  $items = array();
+
+  // Admin settings form.
+  $items['admin/config/drop-jobs/applications'] = array(
+    'title' => 'Application',
+    'description' => 'Configure Job Applications.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_application_settings'),
+    'access arguments' => array('administer drop_jobs applications'),
+    'file' => 'drop_jobs_application.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  // Applications settings local action.
+  $items['admin/drop-jobs/applications/settings'] = array(
+    'title' => 'Application settings',
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('admin/config/drop-jobs/applications'),
+    'access arguments' => array('administer drop_jobs applications'),
+    'type' => MENU_LOCAL_ACTION,
+  );
+
+  // Manage applications local action.
+  $items['admin/config/drop-jobs/applications/manage'] = array(
+    'title' => 'Manage Applications',
+    'page callback' => 'drupal_goto',
+    'page arguments' => array('admin/drop-jobs/application'),
+    'access arguments' => array('administer drop_jobs applications'),
+    'type' => MENU_LOCAL_ACTION,
+  );
+
+  // Recruiter preferences form.
+  $items['dashboard/recruiter/preferences/email'] = array(
+    'title' => 'Email Notifications',
+    'description' => 'Configure email notification frequency',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_application_email_settings'),
+    'access callback' => 'drop_jobs_recruiter_dashboard_access',
+    'file' => 'drop_jobs_application.user.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  // Apply to job link.
+  $items['node/%/apply'] = array(
+    'title' => 'Apply to job',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_application_form_apply', 1),
+    'access callback' => 'drop_jobs_application_access_apply',
+    'access arguments' => array(1),
+    'weight' => 6,
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'drop_jobs_application.pages.inc',
+  );
+
+  // Remove job application link.
+  $items['node/%/unapply'] = array(
+    'title' => 'Remove job application',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_application_form_unapply', 1),
+    'access callback' => 'drop_jobs_application_access_unapply',
+    'access arguments' => array(1),
+    'weight' => 6,
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'drop_jobs_application.pages.inc',
+  );
+
+  // For the sake of convenience.
+  $application_uri = 'application/%drop_jobs_application';
+  $application_uri_argument_position = 1;
+
+  // View job application.
+  $items[$application_uri] = array(
+    'title callback' => 'drop_jobs_application_page_title',
+    'title arguments' => array($application_uri_argument_position),
+    'page callback' => 'drop_jobs_application_view',
+    'page arguments' => array($application_uri_argument_position),
+    'access callback' => 'entity_access',
+    'access arguments' => array('view', 'drop_jobs_application', $application_uri_argument_position),
+    'file' => 'drop_jobs_application.pages.inc',
+  );
+
+  $items[$application_uri . '/view'] = array(
+    'title' => 'View',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+
+  // Edit job application.
+  $items[$application_uri . '/edit'] = array(
+    'title' => 'Edit',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_application_form', $application_uri_argument_position),
+    'access callback' => 'entity_access',
+    'access arguments' => array('edit', 'drop_jobs_application', $application_uri_argument_position),
+    'file' => 'drop_jobs_application.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+  );
+
+  // Delete job application.
+  $items[$application_uri . '/delete'] = array(
+    'title' => 'Delete application',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('drop_jobs_application_delete_form', $application_uri_argument_position),
+    'access callback' => 'entity_access',
+    'access arguments' => array('edit', 'drop_jobs_application', $application_uri_argument_position),
+    'file' => 'drop_jobs_application.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function drop_jobs_application_menu_alter(&$items) {
+  $items['node/%views_arg/applications']['type'] = MENU_LOCAL_ACTION;
+  $items['node/%views_arg/applications']['weight'] = 99;
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function drop_jobs_application_admin_paths() {
+  return array(
+    'node/*/applications' => TRUE,
+  );
+}
+
+/**
+ * Implements hook_permission().
+ */
+function drop_jobs_application_permission() {
+  return array(
+    'administer drop_jobs applications' => array(
+      'title' => t('Administer job applications'),
+    ),
+    'create drop_jobs applications' => array(
+      'title' => t('Create job applications'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function drop_jobs_application_entity_info() {
+  $return = array(
+    'drop_jobs_application' => array(
+      'label' => t('Job Application'),
+      'plural label' => t('Job Applications'),
+      'description' => t('Drop Jobs Job Applications'),
+      'entity class' => 'DropJobsApplication',
+      'controller class' => 'DropJobsApplicationController',
+      'base table' => 'drop_jobs_application',
+      'fieldable' => TRUE,
+      'view modes' => array(
+        'full' => array(
+          'label' => t('Full Application'),
+          'custom settings' => FALSE,
+        ),
+      ),
+      'entity keys' => array(
+        'id' => 'aid',
+        'bundle' => 'type',
+      ),
+      'bundles' => array(),
+      'bundle keys' => array(
+        'bundle' => 'type',
+      ),
+      'uri callback' => 'entity_class_uri',
+      'label callback' => 'entity_class_label',
+      'access callback' => 'drop_jobs_application_access',
+      'module' => 'drop_jobs_application',
+      'metadata controller class' => 'DropJobsApplicationMetadataController',
+      'views controller class' => 'DropJobsApplicationViewsController',
+    ),
+  );
+
+  // Add bundle info but bypass entity_load() as we cannot use it here.
+  $types = db_select('drop_jobs_application_type', 'djat')
+    ->fields('djat')
+    ->execute()
+    ->fetchAllAssoc('type');
+
+  foreach ($types as $type => $info) {
+    $return['drop_jobs_application']['bundles'][$type] = array(
+      'label' => $info->label,
+      'admin' => array(
+        'path' => 'admin/structure/job_applications/manage/%drop_jobs_application_type',
+        'real path' => 'admin/structure/job_applications/manage/' . $type,
+        'bundle argument' => 4,
+        'access arguments' => array('administer drop_jobs applications'),
+      ),
+    );
+  }
+
+  // Support entity cache module.
+  if (module_exists('entitycache')) {
+    $return['drop_jobs_application']['entity cache'] = TRUE;
+    // Entity cache obsoletes field cache.
+    $return['drop_jobs_application']['field cache'] = FALSE;
+  }
+
+  $return['drop_jobs_application_type'] = array(
+    'label' => t('Job Application type'),
+    'plural label' => t('Job Application types'),
+    'description' => t('Drop Jobs Job Application types.'),
+    'entity class' => 'DropJobsApplicationType',
+    'controller class' => 'EntityAPIControllerExportable',
+    'base table' => 'drop_jobs_application_type',
+    'fieldable' => FALSE,
+    'bundle of' => 'drop_jobs_application',
+    'exportable' => TRUE,
+    'configuration' => TRUE,
+    'entity keys' => array(
+      'id' => 'id',
+      'name' => 'type',
+      'label' => 'label',
+    ),
+    'access callback' => 'drop_jobs_application_type_access',
+    'module' => 'drop_jobs_application',
+    // Enable the entity API's admin UI.
+    'admin ui' => array(
+      'path' => 'admin/structure/job_applications',
+      'file' => 'drop_jobs_application.admin.inc',
+      'controller class' => 'DropJobsApplicationTypeUIController',
+    ),
+  );
+
+  return $return;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function drop_jobs_application_theme() {
+  return array(
+    'drop_jobs_application' => array(
+      'render element' => 'elements',
+      'template' => 'drop_jobs_application',
+    ),
+  );
+}
+
+/**
+ * Menu title callback.
+ *
+ * @see drop_jobs_application_menu()
+ */
+function drop_jobs_application_page_title(DropJobsApplication $application) {
+  return $application->label();
+}
+
+/**
+ * Access callback.
+ *
+ * Check if we should display the "Apply" link on a job node.
+ *
+ * @param int $nid
+ * @see drop_jobs_application_menu().
+ */
+function drop_jobs_application_access_apply($nid) {
+  if ($node = node_load($nid)) {
+    // Check whether its a job node.
+    if ($node->type === 'job') {
+      // Check whether job accepts applications.
+      if (drop_jobs_application_allowed($nid)) {
+        // Check whether user can apply.
+        if (user_access('create drop_jobs applications')) {
+          // Only candidates to apply to the same job once.
+          $account = user_uid_optional_load();
+          $applications = drop_jobs_application_load_by_user_and_node($account, $node);
+          return empty($applications);
+        }
+        elseif (user_is_anonymous() && variable_get_value('drop_jobs_application_anonymous')) {
+          return TRUE;
+        }
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Access callback.
+ *
+ * Check if we should display the Remove application link on a job node.
+ *
+ * @param int $nid
+ * @see drop_jobs_application_menu().
+ */
+function drop_jobs_application_access_unapply($nid) {
+  if ($node = node_load($nid)) {
+    // Check whether its a job node.
+    if ($node->type === 'job') {
+      $account = user_uid_optional_load();
+      // Load user's applications to this job.
+      $applications = drop_jobs_application_load_by_user_and_node($account, $node);
+      return !empty($applications);
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Gets an array of all application types, keyed by the type name.
+ *
+ * @param $type_name
+ *   If set, the type with the given name is returned.
+ * @return DropJobsApplicationType[]
+ *   Depending whether $type isset, an array of application types or a single one.
+ */
+function drop_jobs_application_get_types($type_name = NULL) {
+  $types = entity_load_multiple_by_name('drop_jobs_application_type', isset($type_name)
+        ? array($type_name) : FALSE);
+  return isset($type_name) ? reset($types) : $types;
+}
+
+/**
+ * Determines whether the given user has access to an application.
+ *
+ * @param $op
+ *   The operation being performed. One of 'view', 'update', 'create', 'delete'
+ *   or just 'edit' (being the same as 'create' or 'update').
+ * @param $application
+ *   Optionally an application to check access for. If nothing is given,
+ *    access for all applications is determined.
+ * @param $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ * @return boolean
+ *   Whether access is allowed or not.
+ */
+function drop_jobs_application_access($op, $application = NULL, $account = NULL) {
+  if (!isset($account)) {
+    $account = user_uid_optional_load();
+  }
+
+  // @TODO refactor this to use new permissions.
+
+  switch ($op) {
+    case 'create':
+      if (isset($application->nid)) {
+        $node = node_load($application->nid);
+      }
+
+      return user_access('administer drop_jobs applications', $account)
+        || user_access('create drop_jobs applications', $account);
+    case 'view':
+      return user_access('administer drop_jobs applications', $account)
+        || user_access('view drop_jobs applications', $account)
+        || isset($application->uid) && ($application->uid == $account->uid)
+        || isset($node->nid) && ($node->uid == $account->uid);
+    case 'edit':
+      return user_access('administer drop_jobs applications')
+        || user_access('edit any drop_jobs application')
+        || (user_access('edit own drop_jobs applications') && isset($application->uid) && ($application->uid == $account->uid));
+    case 'delete':
+      return user_access('administer drop_jobs applications')
+        || user_access('delete any drop_jobs application')
+        || (user_access('delete own drop_jobs applications') && isset($application->uid) && ($application->uid == $account->uid));
+  }
+}
+
+/**
+ * Access callback for the entity API.
+ */
+function drop_jobs_application_type_access($op, $type = NULL, $account = NULL) {
+  return user_access('administer drop_jobs applications', $account);
+}
+
+/**
+ * Fetch an application object.
+ *
+ * @param $aid
+ *   Integer specifying the application id.
+ * @param $reset
+ *   A boolean indicating that the internal cache should be reset.
+ * @return
+ *   A fully-loaded $application object or FALSE if it cannot be loaded.
+ *
+ * @see drop_jobs_application_load_multiple()
+ */
+function drop_jobs_application_load($aid, $reset = FALSE) {
+  $applications = drop_jobs_application_load_multiple(array($aid), array(), $reset);
+  return reset($applications);
+}
+
+/**
+ * Load multiple applications based on certain conditions.
+ *
+ * @param $aids
+ *   An array of application IDs.
+ * @param $conditions
+ *   An array of conditions to match against the {drop_jobs_application} table.
+ * @param $reset
+ *   A boolean indicating that the internal cache should be reset.
+ * @return
+ *   An array of application objects, indexed by aid.
+ *
+ * @see entity_load()
+ * @see drop_jobs_application_load()
+ * @see drop_jobs_application_load_by_user()
+ */
+function drop_jobs_application_load_multiple($aids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('drop_jobs_application', $aids, $conditions, $reset);
+}
+
+/**
+ * Fetch applications by account.
+ *
+ * @param $account
+ *   The user account to load applications for, or its uid.
+ * @param $type_name
+ *   To load a single application type, pass the type name of the application to load.
+ * @param $reset
+ *   To bypass the static cache set this to true.
+ * @return
+ *   Either a single application or an array of applications keyed by application type.
+ *
+ * @see drop_jobs_application_load_multiple()
+ * @see drop_jobs_application_delete()
+ * @see DropJobsApplication::save()
+ */
+function drop_jobs_application_load_by_user($account, $type_name = NULL, $reset = FALSE) {
+  // Use a separate query to determine all application ids per user and cache them.
+  // That way we can look up applications by id and benefit from the static cache
+  // of the entity loader.
+  $cache = &drupal_static(__FUNCTION__, array());
+  $uid = is_object($account) ? $account->uid : $account;
+
+  if (!isset($cache[$uid]) || $reset) {
+    if (empty($type_name)) {
+      $applications = drop_jobs_application_load_multiple(FALSE, array('uid' => $uid));
+      // Cache ids for further lookups.
+      $cache[$uid] = array();
+      foreach ($applications as $aid => $application) {
+        $cache[$uid][] = $aid;
+      }
+      return $applications;
+    }
+    $cache[$uid] = db_select('drop_jobs_application', 'dja')
+      ->fields('dja', array('aid'))
+      ->condition('uid', $uid)
+      ->execute()
+      ->fetchAllKeyed();
+  }
+
+  if (isset($type_name)) {
+    // Manually filter, as array_filter() can't take additional parameters.
+    $applications_filtered = array();
+
+    foreach ($cache[$uid] as $aid) {
+      if ($application = drop_jobs_application_load($aid)) {
+        if ($application->type === $type_name) {
+          $applications_filtered[$aid] = $application;
+        }
+      }
+    }
+
+    return $applications_filtered;
+  }
+
+  // Return an array containing applications keyed by application id.
+  return drop_jobs_application_load_multiple($cache[$uid]);
+}
+
+/**
+ * Fetch applications by job node.
+ *
+ * @param $node
+ *   The job node object to load applications for, or its nid.
+ * @param $type_name
+ *   To load a single application type, pass the type name of the application to load.
+ * @param $reset
+ *   To bypass the static cache set this to true.
+ * @return
+ *   Either a single application or an array of applications keyed by application type.
+ *
+ * @see drop_jobs_application_load_multiple()
+ * @see drop_jobs_application_delete()
+ * @see DropJobsApplication::save()
+ */
+function drop_jobs_application_load_by_node($node, $type_name = NULL, $reset = FALSE) {
+  // Use a separate query to determine all application ids per user and cache them.
+  // That way we can look up applications by id and benefit from the static cache
+  // of the entity loader.
+  $cache = &drupal_static(__FUNCTION__, array());
+  $nid = is_object($node) ? $node->nid : $node;
+
+  if (!isset($cache[$nid]) || $reset) {
+    if (empty($type_name)) {
+      $applications = drop_jobs_application_load_multiple(FALSE, array('nid' => $nid));
+      // Cache ids for further lookups.
+      $cache[$nid] = array();
+      foreach ($applications as $aid => $application) {
+        $cache[$nid][] = $aid;
+      }
+      return $applications;
+    }
+    $cache[$nid] = db_select('drop_jobs_application', 'dja')
+      ->fields('dja', array('aid'))
+      ->condition('nid', $nid)
+      ->execute()
+      ->fetchAllKeyed();
+  }
+
+  if (isset($type_name)) {
+    // Manually filter, as array_filter() can't take additional parameters.
+    $applications_filtered = array();
+
+    foreach ($cache[$nid] as $aid) {
+      if ($application = drop_jobs_application_load($aid)) {
+        if ($application->type === $type_name) {
+          $applications_filtered[$aid] = $application;
+        }
+      }
+    }
+
+    return $applications_filtered;
+  }
+
+  // Return an array containing applications keyed by application id.
+  return drop_jobs_application_load_multiple($cache[$nid]);
+}
+
+/**
+ * Fetch an application by account and job node.
+ * Used to find out whether a user has already applied to a specific job.
+ * This will only consider "active" (non-revoked) applications.
+ *
+ * @param stdClass|integer
+ *   The user account to load applications for, or its uid.
+ * @param stdClass|integer
+ *   The job node object to load applications for, or its nid.
+ * @param boolean
+ *   To bypass the static cache set this to true.
+ * @return DropJobsApplication|FALSE
+ *   Either a single application object or FALSE if the user hasn't applied to
+ *   the job.
+ */
+function drop_jobs_application_load_by_user_and_node($account, $node, $reset = FALSE) {
+  $cache = &drupal_static(__FUNCTION__, array());
+  $nid = is_object($node) ? $node->nid : $node;
+  $uid = is_object($account) ? $account->uid : $account;
+  $key = "{$uid}_{$nid}";
+
+  if (!isset($cache[$key]) || $reset) {
+    $efq = new EntityFieldQuery();
+    $efq->entityCondition('entity_type', 'drop_jobs_application')
+      ->propertyCondition('uid', $uid, '=')
+      ->propertyCondition('nid', $nid, '=')
+      ->propertyCondition('status', DROP_JOBS_APPLICATION_REVOKED, '<>');
+
+    $result = $efq->execute();
+
+    if (!empty($result)) {
+      $application = reset($result['drop_jobs_application']);
+      // Cache ids for further lookups.
+      $cache[$key] = $application->aid;
+      return $application;
+    }
+    else {
+      return FALSE;
+    }
+  }
+
+  return entity_load_single('drop_jobs_application', $cache[$key]);
+}
+
+/**
+ * Deletes an application.
+ */
+function drop_jobs_application_delete(DropJobsApplication $application) {
+  $application->delete();
+}
+
+/**
+ * Delete multiple applications.
+ *
+ * @param $aids
+ *   An array of application IDs.
+ */
+function drop_jobs_application_delete_multiple(array $aids) {
+  entity_get_controller('drop_jobs_application')->delete($aids);
+}
+
+/**
+ * Implements hook_user_delete().
+ *
+ * When a user account is deleted, delete it's applications.
+ */
+function drop_jobs_application_user_delete($account) {
+  foreach (drop_jobs_application_load_by_user($account) as $application) {
+    drop_jobs_application_delete($application);
+  }
+}
+
+/**
+ * Implements hook_node_delete().
+ *
+ * Deletes applications and statistics when a job is deleted.
+ */
+function drop_jobs_application_node_delete($node) {
+  if ($node->type === 'job') {
+    foreach (drop_jobs_application_load_by_node($node) as $application) {
+      drop_jobs_application_delete($application);
+    }
+
+    db_delete('drop_jobs_application_statistics')
+      ->condition('nid', $node->nid)
+      ->execute();
+  }
+}
+
+/**
+ * Create a new application object.
+ */
+function drop_jobs_application_create(array $values) {
+  return new DropJobsApplication($values);
+}
+
+/**
+ * Saves an application to the database.
+ *
+ * @param $application
+ *   The application object.
+ */
+function drop_jobs_application_save(DropJobsApplication $application) {
+  return $application->save();
+}
+
+/**
+ * Saves an application type to the db.
+ */
+function drop_jobs_application_type_save(DropJobsApplicationType $type) {
+  $type->save();
+}
+
+/**
+ * Menu argument loader; Load an application type type by string.
+ *
+ * @param $type
+ *   The machine-readable name of an application type to load.
+ * @return
+ *   An application type array or FALSE if $type does not exist.
+ */
+function drop_jobs_application_type_load($type) {
+  return drop_jobs_application_get_types($type);
+}
+
+/**
+ * Deletes an application type from.
+ */
+function drop_jobs_application_type_delete(DropJobsApplicationType $type) {
+  $type->delete();
+}
+
+/**
+ * Return the options lists for the drop_jobs_application status property.
+ */
+function drop_jobs_application_status_options_list() {
+  return array(
+    DROP_JOBS_APPLICATION_NEW => t('New'),
+    DROP_JOBS_APPLICATION_READ => t('Read'),
+    DROP_JOBS_APPLICATION_HIDDEN => t('Hidden'),
+    DROP_JOBS_APPLICATION_REVOKED => t('Revoked'),
+  );
+}
+
+/**
+ * Returns allowed application types for a job.
+ *
+ * @param int
+ *   The job node id.
+ * @return string|FALSE
+ *   An application type machine name or FALSE if no applications are allowed.
+ */
+function drop_jobs_application_allowed($nid) {
+  if ($node = node_load($nid)) {
+    if ($wrapper = entity_metadata_wrapper('node', $node)) {
+      if ($application = $wrapper->field_job_applications->value()) {
+        return $application->type;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ *
+ * Add application properties to application type "Manage Fields" and
+ * "Manage Display" forms.
+ */
+function drop_jobs_application_field_extra_fields() {
+  $extra_fields = array();
+  $fields = array(
+    'type' => array(
+      'label' => t('Application Type'),
+      'weight' => -5,
+    ),
+    'created' => array(
+      'label' => t('Created'),
+      'weight' => -4,
+    ),
+    'uid' => array(
+      'label' => t('Candidate'),
+      'weight' => -3,
+    ),
+    'nid' => array(
+      'label' => t('Job'),
+      'weight' => -2,
+    ),
+    'status' => array(
+      'label' => t('Status'),
+      'weight' => -1,
+    ),
+  );
+
+  // Iterate through application type bundles.
+  foreach (drop_jobs_application_get_types() as $bundle => $type) {
+    $extra_fields['drop_jobs_application'][$bundle] = array(
+      'form' => $fields,
+      'display' => array(
+        'type' => array(
+          'label' => t('Type'),
+          'description' => t('Application type'),
+          'weight' => -4,
+        ),
+      ) + $fields,
+    );
+  }
+
+  return $extra_fields;
+}
+
+/**
+ * Implements hook_help().
+ */
+function drop_jobs_application_help($path, $arg) {
+  switch ($path) {
+    case 'dashboard/applications-received':
+      return t('Here you can view, edit and delete your received job applications.');
+    case 'dashboard/applications-sent':
+      return t('Here you can view, edit and delete your sent job applications.');
+    case 'admin/config/drop-jobs/application':
+      return t('Here you can configure settings for job applications.');
+    case 'admin/drop-jobs/applications':
+      return t('Here you can view, edit and delete all job applications.');
+      break;
+  }
+}
+
+/**
+ * Implements hook_node_load().
+ *
+ * Add application statistics to job nodes.
+ */
+function drop_jobs_application_node_load($nodes, $types) {
+  $nids = array();
+
+  foreach ($nodes as $node) {
+    if ($node->type === 'job') {
+      $nids[] = $node->nid;
+    }
+  }
+
+  if (!empty($nids)) {
+    $result =
+      db_select('drop_jobs_application_statistics', 'djas')
+      ->fields('djas')
+      ->condition('djas.nid', $nids, 'IN')
+      ->execute();
+
+    foreach ($result as $record) {
+      $nodes[$record->nid]->last_application_aid = $record->last_application_aid;
+      $nodes[$record->nid]->last_application_timestamp = $record->last_application_timestamp;
+      $nodes[$record->nid]->last_application_name = $record->last_application_name;
+      $nodes[$record->nid]->last_application_uid = $record->last_application_uid;
+      $nodes[$record->nid]->application_count = $record->application_count;
+    }
+  }
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function drop_jobs_application_node_insert($node) {
+  if ($node->type === 'job') {
+    // Allow bulk updates and inserts to temporarily disable the
+    // maintenance of the {drop_jobs_application_statistics} table.
+    if (variable_get_value('drop_jobs_application_maintain_statistics')) {
+      db_insert('drop_jobs_application_statistics')
+        ->fields(array(
+          'nid' => $node->nid,
+          'last_application_aid' => 0,
+          'last_application_timestamp' => $node->changed,
+          'last_application_name' => NULL,
+          'last_application_uid' => $node->uid,
+          'application_count' => 0,
+        ))
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Updates the application statistics for a given node. This should be called any
+ * time an application is added, deleted, or updated.
+ *
+ * The following fields are contained in the drop_jobs_application_statistics table.
+ * - last_application_timestamp: the timestamp of the last application for this node or the node create stamp if no applications exist for the node.
+ * - last_application_name: the name of the anonymous poster for the last application
+ * - last_application_uid: the uid of the poster for the last application for this node or the node authors uid if no applications exists for the node.
+ * - application_count: the total number of applications to this node.
+ */
+function _drop_jobs_application_update_statistics($nids) {
+  // Allow bulk updates and inserts to temporarily disable the
+  // maintenance of the {drop_jobs_application_statistics} table.
+  if (!variable_get_value('drop_jobs_application_maintain_statistics')) {
+    return;
+  }
+
+  if (!is_array($nids)) {
+    $nids = array($nids);
+  }
+
+  foreach ($nids as $nid) {
+    $count = db_query('SELECT COUNT(aid) FROM {drop_jobs_application} WHERE nid = :nid', array(':nid' => $nid))->fetchField();
+
+    if ($count > 0) {
+      // Found applications.
+      $last_reply = db_query_range('SELECT aid, changed, uid FROM {drop_jobs_application} WHERE nid = :nid ORDER BY aid DESC', 0, 1, array(
+        ':nid' => $nid,
+        ))->fetchObject();
+      db_update('drop_jobs_application_statistics')
+        ->fields(array(
+          'last_application_aid' => $last_reply->aid,
+          'application_count' => $count,
+          'last_application_timestamp' => $last_reply->changed,
+          'last_application_name' => $last_reply->uid ? '' : $last_reply->name,
+          'last_application_uid' => $last_reply->uid,
+        ))
+        ->condition('nid', $nid)
+        ->execute();
+    }
+    else {
+      // No applications to date.
+      $node = db_query('SELECT uid, created FROM {node} WHERE nid = :nid', array(':nid' => $nid))->fetchObject();
+      db_update('drop_jobs_application_statistics')
+        ->fields(array(
+          'last_application_aid' => 0,
+          'application_count' => 0,
+          'last_application_timestamp' => $node->created,
+          'last_application_name' => '',
+          'last_application_uid' => $node->uid,
+        ))
+        ->condition('nid', $nid)
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Access callback.
+ *
+ * Used by the "drop_jobs_job_applications" view.
+ * Only allow the view to appear if the job node has applications enabled and
+ * we are either an administrator or the node's author.
+ */
+function drop_jobs_application_access_view($account = NULL) {
+  if (!isset($account)) {
+    $account = user_uid_optional_load();
+  }
+
+  // We can safely assume this because of the view's path.
+  $nid = arg(1);
+
+  // Check whether job accepts applications.
+  if ($allowed = drop_jobs_application_allowed($nid)) {
+    if ($node = node_load($nid)) {
+      if ($node->uid == $account->uid) {
+        return TRUE;
+      }
+      else {
+        return user_access('administer drop_jobs applications', $account);
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function drop_jobs_application_form_job_node_form_alter(&$form, &$form_state) {
+  $language = $form['language']['#value'];
+
+  $form['field_job_notification']['#states'] = array(
+    'invisible' => array(
+      ':input[name="field_job_applications[' . $language . ']"]' => array('value' => '_none'),
+    ),
+  );
+
+  // Only show notification email field if "Custom email address" selected in
+  // notification preferences.
+  $form['field_job_notification_email']['#states'] = array(
+    'visible' => array(
+      ':input[name="field_job_notification[' . $language . '][email]"]' => array('checked' => TRUE)
+    ),
+  );
+}
+
+/**
+ * Implements hook_variable_info().
+ */
+function drop_jobs_application_variable_info() {
+  $variables = array();
+
+  $variables['drop_jobs_application_anonymous'] = array(
+    'title' => t('Display "Apply to job" link to anonymous users'),
+    'default' => TRUE,
+    'type' => 'boolean',
+    'group' => 'drop_jobs_application',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_application_text'] = array(
+    'title' => t('Display text on application forms'),
+    'default' => array('format' => 'filtered_html', 'value' => 'You may display some custom text at the top of every application form. It is editable in the applications admin settings page.'),
+    'group' => 'drop_jobs_application',
+    'token' => FALSE,
+  );
+
+  $variables['drop_jobs_application_maintain_statistics'] = array(
+    'title' => t('Whether to maintain application count statistics'),
+    'default' => TRUE,
+    'type' => 'boolean',
+    'group' => 'drop_jobs_application',
+    'token' => FALSE,
+  );
+
+  return $variables;
+}
+
+/**
+ * Revokes a job application.
+ *
+ * @param DropJobsApplication
+ *   The application object.
+ *
+ * @return boolean
+ */
+function drop_jobs_application_set_revoked(DropJobsApplication $application) {
+  $application->status = DROP_JOBS_APPLICATION_REVOKED;
+
+  if (drop_jobs_application_save($application)) {
+    rules_invoke_event('drop_jobs_application_revoke', $application);
+    return TRUE;
+  }
+
+  return FALSE;
+}

@@ -1,0 +1,90 @@
+<?php
+/**
+ * @file
+ * Drop Jobs Development module.
+ */
+
+include_once('drop_jobs_dev.features.inc');
+
+/**
+ * Implements hook_field_formatter_info().
+ *
+ * Adds some extra display formatters for exporting data to CSV.
+ */
+function drop_jobs_dev_field_formatter_info() {
+  $info = array();
+
+  // Support for Term Level field.
+  $info['term_level_export'] = array(
+    'label' => t('Term Level CSV Export'),
+    'description' => t('Formats Term Level data to be easily exportable via CSV.'),
+    'field types' => array('term_level'),
+    'settings' => array(),
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function drop_jobs_dev_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+
+  if ($display['type'] === 'term_level_export') {
+    $term_levels = array();
+    foreach ($items as $delta => $item) {
+      $term_levels[$item['tid']] = $item['level'];
+    }
+    $terms = taxonomy_term_load_multiple(array_keys($term_levels));
+
+    foreach ($term_levels as $tid => $level_key) {
+      if (isset($terms[$tid])) {
+        $term = $terms[$tid];
+        $element[$tid] = array('#markup' => check_plain($term->name) . '|' . check_plain($level_key));
+      }
+    }
+  }
+
+  return $element;
+}
+
+/**
+ * Utility function for debugging queries using DBTNG. Accepts a query object
+ * and returns a string with all parameters filled in and curly brackets
+ * stripped out.
+ *
+ * @param SelectQueryInterface
+ *   An object that implements the SelectQueryInterface interface.
+ * @return string
+ */
+function djpq(SelectQueryInterface $query) {
+  // Make sure we have devel module loaded. Since this is a debugging function
+  // we don't care about performance here.
+  include_once drupal_get_path('module', 'devel') . '/devel.module';
+  return str_replace(array('{', '}'), '', dpq($query, TRUE));
+}
+
+/**
+ * Wrapper around krumo().
+ * This will manually include the Krumo class and is useful when:
+ *  - Testing as an anonymous user.
+ *  - Testing as a user without permissions to access krumo.
+ *  - Testing in certain places where krumo is not normally available.
+ */
+function djkr() {
+  include_once drupal_get_path('module', 'devel') . '/krumo/class.krumo.php';
+  krumo(func_get_args());
+}
+
+/**
+ * Wrapper around dpm().
+ * This will manually include the Krumo class and is useful when:
+ *  - Testing as an anonymous user.
+ *  - Testing as a user without permissions to access dpm.
+ *  - Testing in certain places where dpm is not normally available.
+ */
+function djpm() {
+  include_once drupal_get_path('module', 'devel') . '/devel.module';
+  dpm(func_get_args());
+}
